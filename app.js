@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793827843';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793828717';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -763,10 +763,13 @@ async function loadGrab() {
   $('grList').innerHTML = (data || []).map(r => recItem(r, true)).join('') || '<p class="muted">Todavía no hay grabaciones.</p>';
 }
 async function loadRecs() {
-  const { data, error } = await sb.from('grabaciones').select('*, perfiles(nombre)').eq('cancion_id', recSong.id).order('created_at', { ascending: false });
+  let qq = sb.from('grabaciones').select('*, perfiles(nombre)');
+  qq = recSong ? qq.eq('cancion_id', recSong.id) : qq.eq('grupo_id', app.grupo.id).is('cancion_id', null);
+  const { data, error } = await qq.order('created_at', { ascending: false });
   if (error) { $('rcList').innerHTML = `<p class="muted">${esc(errMsg(error))}</p>`; return }
-  $('rcList').innerHTML = (data || []).map(r => recItem(r, false)).join('') || '<p class="muted">Todavía no hay grabaciones de esta canción. ¡Grabá el próximo ensayo!</p>';
+  $('rcList').innerHTML = (data || []).map(r => recItem(r, false)).join('') || `<p class="muted">${recSong ? 'Todavía no hay grabaciones de esta canción.' : 'Todavía no hay grabaciones libres.'} ¡Grabá el próximo ensayo!</p>`;
 }
+$('btnGrabGen').onclick = () => { recSong = null; $('rcT').textContent = '🎙 Grabaciones del grupo'; $('recs').classList.remove('hidden'); loadRecs() };
 $('btnRecs').onclick = () => { if (!recSong) return; $('rcT').textContent = '🎧 ' + recSong.titulo.replace(/^\s*\d+\s*\.\s*/, ''); $('recs').classList.remove('hidden'); loadRecs() };
 $('rcX').onclick = () => { stopRecording(true); document.querySelectorAll('#recs audio').forEach(a => a.pause()); $('recs').classList.add('hidden') };
 async function onRecClick(e) {
@@ -792,7 +795,7 @@ async function uploadAudio(blob, ext) {
   $('rcRecInfo').classList.remove('hidden'); $('rcRecInfo').textContent = 'Subiendo…';
   const { error } = await sb.storage.from('grabaciones').upload(path, blob, { contentType: blob.type || 'audio/mpeg', upsert: false });
   if (error) { $('rcRecInfo').textContent = 'No se pudo subir: ' + errMsg(error); return }
-  const { error: e2 } = await sb.from('grabaciones').insert({ grupo_id: app.grupo.id, cancion_id: recSong.id, titulo: $('rcName').value.trim(), tipo: 'audio', path, subido_por: app.user.id });
+  const { error: e2 } = await sb.from('grabaciones').insert({ grupo_id: app.grupo.id, cancion_id: recSong ? recSong.id : null, titulo: $('rcName').value.trim(), tipo: 'audio', path, subido_por: app.user.id });
   if (e2) { await sb.storage.from('grabaciones').remove([path]); $('rcRecInfo').textContent = errMsg(e2); return }
   $('rcRecInfo').textContent = 'Subida ✓'; $('rcName').value = ''; setTimeout(() => $('rcRecInfo').classList.add('hidden'), 1500); loadRecs(); loadGrab();
 }
@@ -800,7 +803,7 @@ $('rcUp').onclick = () => $('rcFile').click();
 $('rcFile').onchange = () => { const f = $('rcFile').files[0]; $('rcFile').value = ''; if (!f) return; if (!$('rcName').value.trim()) $('rcName').value = f.name.replace(/\.[^.]+$/, ''); uploadAudio(f, (f.name.split('.').pop() || 'mp3').toLowerCase()) };
 $('rcAddUrl').onclick = async () => {
   const url = $('rcUrl').value.trim(); if (!/^https?:\/\//i.test(url)) { toast('Pegá un link que empiece con https://'); return }
-  const { error } = await sb.from('grabaciones').insert({ grupo_id: app.grupo.id, cancion_id: recSong.id, titulo: $('rcName').value.trim(), tipo: 'link', url, subido_por: app.user.id });
+  const { error } = await sb.from('grabaciones').insert({ grupo_id: app.grupo.id, cancion_id: recSong ? recSong.id : null, titulo: $('rcName').value.trim(), tipo: 'link', url, subido_por: app.user.id });
   if (error) { toast(errMsg(error)); return } $('rcUrl').value = ''; $('rcName').value = ''; toast('Link agregado ✓'); loadRecs(); loadGrab();
 };
 function stopRecording(discard) {
