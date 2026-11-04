@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0c1d">
+<title>Cancionero en vivo</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0c1d'/%3E%3Crect x='14' y='5' width='4' height='22' rx='1' fill='%23f0c264'/%3E%3Crect x='8' y='10' width='16' height='4' rx='1' fill='%23f0c264'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+
+:root{
+  --bg:#0d0c1d; --panel:#1a1833; --panel2:#221f40; --line:#34305c; --tx:#f6f1e7; --mut:#a9a3c4;
+  --acc:#f0c264; --acc2:#e8925c; --ch:#ffd47a; --hi:rgba(240,194,100,.10); --rep:#ff6f61; --ok:#58d68d;
+  --serif:'Cormorant Garamond',Georgia,serif;
+  --fs:22px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--tx);font-family:Inter,system-ui,sans-serif}
+body{background:radial-gradient(1200px 520px at 50% -180px,rgba(240,194,100,.20),transparent 70%),radial-gradient(900px 600px at 110% 110%,rgba(120,80,200,.18),transparent 60%),var(--bg);background-attachment:fixed;min-height:100vh}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)}
+button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;cursor:pointer;min-height:44px}
+button:active{transform:scale(.97)}
+button.on{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#2a1600;border-color:transparent;font-weight:700;box-shadow:0 4px 18px rgba(240,194,100,.25)}
+button.big{width:100%;padding:16px;font-size:18px;font-weight:600}
+button.pri{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#2a1600;border-color:transparent;font-weight:700;box-shadow:0 6px 22px rgba(240,194,100,.28)}
+input{font:inherit;color:var(--tx);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;width:100%}
+.hidden{display:none!important}
+
+/* Inicio */
+#home{max-width:440px;margin:0 auto;padding:28px 20px 40px;display:flex;flex-direction:column;gap:18px}
+#home .hero{text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:6px}
+#home .hero svg{width:120px;height:120px;filter:drop-shadow(0 0 24px rgba(240,194,100,.45))}
+#home h1{font-family:var(--serif);font-size:44px;line-height:1;margin:0;font-weight:700;letter-spacing:.01em}
+#home h1 span{display:block;font-size:.62em;font-style:italic;background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+#home p{color:var(--mut);margin:0;line-height:1.5;text-align:center}
+.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:20px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:12px}
+.card h2{margin:0;font-family:var(--serif);font-size:24px;font-weight:700}
+#codeIn{font-size:34px;letter-spacing:.35em;text-align:center;font-weight:800;background:var(--bg);border-color:var(--line);color:var(--acc)}
+#codeIn:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(240,194,100,.2)}
+#estadoConn{font-size:13px;color:var(--mut);text-align:center}
+
+/* Vista canción */
+#top{position:sticky;top:0;z-index:5;background:rgba(13,12,29,.88);box-shadow:0 6px 24px rgba(0,0,0,.35);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:8px 14px;display:flex;align-items:center;gap:10px}
+#top .t{flex:1;min-width:0}
+#songTitle{font-family:var(--serif);font-weight:700;font-size:23px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#meta{font-size:13px;color:var(--mut);display:flex;gap:10px;flex-wrap:wrap}
+#meta b{color:var(--acc)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mut);margin-right:4px}
+.dot.live{background:var(--ok)}
+#top button{min-height:38px;padding:6px 10px}
+
+#song{padding:16px 16px 180px;font-size:var(--fs);line-height:1.25;max-width:1100px;margin:0 auto}
+.empty{color:var(--mut);text-align:center;padding:70px 20px;font-size:22px;font-family:var(--serif);font-style:italic}
+.sec{border-radius:12px;padding:10px 12px;margin:0 -12px 14px;border:2px solid transparent;transition:background .25s,border-color .25s;position:relative}
+.sec.cur{background:var(--hi);border-color:var(--acc);box-shadow:0 0 0 4px rgba(240,194,100,.08),0 8px 30px rgba(240,194,100,.12)}
+.sec.rep{border-color:var(--rep);background:rgba(255,111,97,.12);box-shadow:0 0 30px rgba(255,111,97,.18)}
+.sec .lbl{font-size:.6em;text-transform:uppercase;letter-spacing:.14em;color:var(--acc2);font-weight:700;margin-bottom:4px}
+.sec .badge{position:absolute;top:-12px;right:10px;background:var(--rep);color:#fff;font-size:13px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.05em}
+.ln{margin:2px 0}
+.wg{display:inline-flex;white-space:nowrap;align-items:flex-end;vertical-align:bottom}
+.seg{display:inline-flex;flex-direction:column;vertical-align:bottom}
+.seg .c{color:var(--ch);font-weight:700;font-size:.8em;height:1.3em;line-height:1.3em;white-space:pre}
+.seg .c:not(:empty){padding-right:.35em}
+.seg .x{white-space:pre}
+.chline{color:var(--ch);font-weight:700;font-size:.8em;white-space:pre-wrap}
+body.nochords .seg .c,body.nochords .chline{display:none}
+body.dir .sec{cursor:pointer}
+
+/* Barra inferior */
+#bar{position:fixed;left:0;right:0;bottom:0;z-index:6;background:rgba(26,24,51,.94);backdrop-filter:blur(8px);box-shadow:0 -8px 30px rgba(0,0,0,.4);border-top:1px solid var(--line);padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:6px}
+.row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.row button{flex:1;min-width:0;max-width:150px;padding:8px 6px;font-size:15px}
+.grp{display:flex;align-items:center;gap:4px;background:rgba(13,12,29,.7);border:1px solid var(--line);border-radius:12px;padding:2px}
+.grp button{border:0;background:transparent;min-width:42px;padding:6px 8px}
+.grp span{font-size:13px;color:var(--mut);min-width:54px;text-align:center}
+.grp span b{color:var(--tx);display:block;font-size:15px}
+
+/* Selector de canciones */
+#picker{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center}
+#picker .box{background:linear-gradient(180deg,var(--panel2),var(--panel));box-shadow:0 -10px 40px rgba(0,0,0,.5);width:100%;max-width:600px;max-height:85vh;border-radius:18px 18px 0 0;padding:14px;display:flex;flex-direction:column;gap:10px}
+#pgroups{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+#pgroups button{flex:none;border-radius:20px;padding:6px 14px;min-height:36px;font-size:14px}
+#plist{overflow:auto;display:flex;flex-direction:column;gap:6px}
+#plist button{text-align:left;display:flex;justify-content:space-between;gap:10px}
+#plist button small{color:var(--mut)}
+
+#editor{position:fixed;inset:0;z-index:12;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center}
+#editor .box{background:var(--panel);width:100%;max-width:700px;height:100%;max-height:100vh;padding:14px 14px calc(14px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px;overflow:auto}
+@media (min-width:720px){#editor .box{height:auto;max-height:92vh;border-radius:18px}}
+#editor label{font-size:14px;font-weight:600;display:flex;flex-direction:column;gap:4px}
+#editor label small{font-weight:400;color:var(--mut)}
+#edChips{display:flex;flex-wrap:wrap;gap:6px}
+#edChips button{border-radius:20px;padding:6px 12px;min-height:34px;font-size:14px}
+#edTxt{font:15px/1.35 ui-monospace,Menlo,Consolas,monospace;color:var(--tx);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;flex:1;min-height:300px;white-space:pre;overflow:auto;resize:vertical}
+#edMsg{font-size:14px;color:var(--rep);min-height:1em}
+.prow{display:flex;gap:6px}.prow .psel{flex:1}.prow .pedit{flex:none;width:48px}
+#tuner{position:fixed;inset:0;z-index:12;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center}
+#tuner .box{background:var(--panel);width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px}
+#tuner select{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px;width:100%}
+#tuner label{display:flex;flex-direction:column;gap:4px;font-size:14px;font-weight:600;flex:1}
+.tuRow{display:flex;gap:8px;align-items:center;justify-content:space-between}
+#tuStrings{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+#tuStrings button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 2px;font-size:20px;font-weight:800}
+#tuStrings button small{font-size:11px;font-weight:400;color:var(--mut)}
+#tuStrings button.on small{color:#1a1300}
+@media (orientation:landscape) and (max-height:520px){#tuner .box{border-radius:18px;max-height:96vh;overflow:auto}}
+/* Colores por grupo */
+.gchip{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin:0 4px 0 0;color:var(--gc);background:color-mix(in srgb,var(--gc) 16%,transparent);border:1px solid color-mix(in srgb,var(--gc) 45%,transparent)}
+#pgroups button{color:var(--gc,var(--tx));border-color:color-mix(in srgb,var(--gc,#888) 45%,transparent)}
+#pgroups button.on{background:var(--gc,var(--acc));color:#160f05;box-shadow:0 4px 16px color-mix(in srgb,var(--gc,#f0c264) 35%,transparent)}
+#plist .psel{background:rgba(13,12,29,.5);border-left:4px solid var(--gc,var(--line));align-items:center}
+#plist .psel>span{font-family:var(--serif);font-size:19px;font-weight:700;line-height:1.15}
+#plist .psel small{flex:none;max-width:45%}
+#pgroups{flex:none}
+#plist .psel small{text-align:right}
+#songGroups{display:inline-flex;gap:4px}
+/* Pantalla completa: más grande y sin distracciones */
+body.fs #meta{display:none}
+body.fs #top{padding:4px 12px}
+body.fs #songTitle{font-size:20px}
+body.fs #song{max-width:none;padding-left:24px;padding-right:24px}
+body.fs .seg .c,body.fs .chline{font-size:.85em}
+body.fs .sec .lbl{font-size:.5em}
+#btnZoom{font-size:14px;white-space:nowrap}
+body.nobar #bar{display:none}
+body.nobar #song{padding-bottom:60vh}
+body.nobar #btnBar{opacity:.55}
+#toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:var(--acc);color:#1a1300;font-weight:700;padding:10px 16px;border-radius:12px;z-index:20;opacity:0;transition:opacity .3s;pointer-events:none;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+
+/* Horizontal */
+@media (orientation:landscape) and (max-height:520px){
+  #top{padding:4px 12px}
+  #meta{font-size:12px}
+  #song{padding-bottom:110px}
+  #bar{flex-direction:row;justify-content:center;padding:4px 8px calc(4px + env(safe-area-inset-bottom))}
+  .row button{padding:4px 6px;min-height:36px}
+  .grp button{min-height:36px}
+}
+@media (orientation:landscape) and (max-height:520px){
+  #song{font-size:calc(var(--fs) * 1.1)}
+}
+
+body:not(.esAdmin) .adminOnly{display:none!important}
+
+/* ====== Vistas nuevas ====== */
+.view{display:none}
+.view.on{display:block}
+.wrap{max-width:560px;margin:0 auto;padding:18px 16px 60px;display:flex;flex-direction:column;gap:14px}
+.hdr{display:flex;align-items:center;gap:10px}
+.hdr h1,.hdr h2{flex:1;margin:0;font-family:var(--serif);font-weight:700}
+.hdr h1{font-size:30px}.hdr h2{font-size:26px;line-height:1.1}
+.muted{color:var(--mut);font-size:14px;margin:0}
+.link{background:none;border:0;color:var(--acc);padding:6px;min-height:auto;text-decoration:underline}
+.tabs{display:flex;gap:6px;background:rgba(13,12,29,.6);border:1px solid var(--line);border-radius:14px;padding:4px}
+.tabs button{flex:1;border:0;background:transparent;padding:8px 4px;font-size:15px}
+.tabs button.on{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#2a1600}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{display:flex;align-items:center;gap:10px;background:rgba(26,24,51,.8);border:1px solid var(--line);border-left:4px solid var(--gc,var(--line));border-radius:14px;padding:10px 12px}
+.item .main{flex:1;min-width:0;cursor:pointer}
+.item .t{font-family:var(--serif);font-size:20px;font-weight:700;line-height:1.15}
+.item .s{font-size:13px;color:var(--mut);margin-top:3px}
+.item button{min-height:38px;padding:6px 10px;flex:none}
+.row2{display:flex;gap:8px}
+.row2>*{flex:1}
+.pill{display:inline-block;background:rgba(240,194,100,.14);color:var(--acc);border:1px solid rgba(240,194,100,.4);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700}
+.bigcode{font-size:30px;font-weight:800;letter-spacing:.25em;color:var(--acc);text-align:center}
+label.chk{display:flex;align-items:center;gap:8px;font-size:15px}
+label.chk input{width:22px;height:22px}
+.auth input{margin-bottom:0}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#222;border-color:#fff;font-weight:600}
+.sep{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:13px}
+.sep:before,.sep:after{content:"";flex:1;height:1px;background:var(--line)}
+.modal{position:fixed;inset:0;z-index:15;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center}
+.modal .box{background:linear-gradient(180deg,var(--panel2),var(--panel));width:100%;max-width:600px;max-height:90vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px}
+.modal h3{margin:0;font-family:var(--serif);font-size:24px}
+#tuMeter{height:120px;position:relative;background:rgba(13,12,29,.7);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+#tuNeedle{position:absolute;left:50%;top:10px;bottom:10px;width:4px;margin-left:-2px;background:var(--acc);border-radius:2px;transition:transform .08s linear;transform-origin:50% 100%}
+#tuCenter{position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(88,214,141,.6)}
+#tuNote{text-align:center;font-family:var(--serif);font-size:54px;font-weight:700;line-height:1}
+#tuInfo{text-align:center;color:var(--mut);font-size:14px}
+#tuNote.ok{color:var(--ok)}
+.rec{flex-direction:column;align-items:stretch}
+.rec audio{width:100%;height:40px;margin-top:6px}
+.rec .top{display:flex;align-items:center;gap:8px}
+.rec .top .main{flex:1}
+#rcRec.on{background:var(--rep);color:#fff;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.6}}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<section id="vLogin" class="view">
+  <div id="home" style="display:flex">
+    <div class="hero">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <defs><radialGradient id="glow"><stop offset="0" stop-color="#ffe2a0" stop-opacity=".9"/><stop offset="1" stop-color="#f0c264" stop-opacity="0"/></radialGradient>
+        <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe3a3"/><stop offset="1" stop-color="#e8925c"/></linearGradient></defs>
+        <circle cx="60" cy="52" r="46" fill="url(#glow)" opacity=".55"/>
+        <g stroke="url(#gold)" stroke-width="2" stroke-linecap="round" opacity=".7"><line x1="60" y1="8" x2="60" y2="18"/><line x1="24" y1="22" x2="31" y2="29"/><line x1="96" y1="22" x2="89" y2="29"/><line x1="12" y1="52" x2="22" y2="52"/><line x1="108" y1="52" x2="98" y2="52"/></g>
+        <rect x="54" y="22" width="12" height="78" rx="3" fill="url(#gold)"/><rect x="36" y="40" width="48" height="12" rx="3" fill="url(#gold)"/>
+        <path d="M78 74c0-6 9-6 9 0v20" stroke="#f6f1e7" stroke-width="3" fill="none" opacity=".85"/><ellipse cx="82" cy="95" rx="6" ry="4.5" fill="#f6f1e7" opacity=".85"/>
+      </svg>
+      <h1>Cancionero <span>en vivo</span></h1>
+    </div>
+    <p>Tu cancionero, tu grupo y la misa sincronizada en todos los celulares.</p>
+    <div class="card auth">
+      <h2 id="authTitle">Entrar</h2>
+      <button class="big gbtn" id="btnGoogle"><svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.2-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>Seguir con Google</button>
+      <div class="sep">o con tu email</div>
+      <input id="auName" placeholder="Tu nombre" class="hidden" autocomplete="name">
+      <input id="auEmail" type="email" placeholder="Email" autocomplete="email">
+      <input id="auPass" type="password" placeholder="Contraseña (mínimo 6)" autocomplete="current-password">
+      <button class="big pri" id="btnAuth">Entrar</button>
+      <div style="display:flex;justify-content:space-between">
+        <button class="link" id="btnAuthSwitch">Crear una cuenta</button>
+        <button class="link" id="btnForgot">Olvidé mi contraseña</button>
+      </div>
+      <div id="auMsg" class="muted" style="text-align:center"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ INICIO ============ -->
+<section id="vHome" class="view">
+  <div class="wrap">
+    <div class="hdr"><h1>Hola, <span id="hName"></span></h1><button id="btnLogout" title="Salir">Salir</button></div>
+    <div class="card">
+      <h2>Entrar a una sala en vivo</h2>
+      <input id="codeIn" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+      <button class="big pri" id="btnJoin">Entrar</button>
+    </div>
+    <div class="card">
+      <h2>Mis grupos</h2>
+      <div id="gList" class="list"></div>
+      <div class="row2"><input id="gNew" placeholder="Nombre del grupo nuevo"><button id="btnGNew" style="flex:none">Crear</button></div>
+      <div class="row2"><input id="gJoin" placeholder="Código de invitación" autocomplete="off" style="text-transform:uppercase"><button id="btnGJoin" style="flex:none">Unirme</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GRUPO ============ -->
+<section id="vGrupo" class="view">
+  <div class="wrap">
+    <div class="hdr"><button id="btnGBack">‹</button><h2 id="gName"></h2><button id="btnGRen" class="adminOnly" title="Cambiar nombre">✎</button><span id="gRol" class="pill"></span></div>
+    <button class="big pri adminOnly" id="btnDirigir">🎤 Dirigir en vivo</button>
+    <div class="tabs"><button data-tab="canc" class="on">Canciones</button><button data-tab="libros">Cancioneros</button><button data-tab="grab">🎧</button><button data-tab="miem">Miembros</button></div>
+
+    <div data-pane="canc">
+      <div class="row2" style="margin-bottom:8px"><input id="cSearch" placeholder="Buscar canción…"><button id="btnCNew" class="pri adminOnly" style="flex:none">＋ Nueva</button></div>
+      <div id="cGroups" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px"></div>
+      <div id="cList" class="list"></div>
+      <button class="link" id="btnPublicas" style="margin-top:8px">🌎 Ver canciones compartidas por otros grupos</button>
+    </div>
+
+    <div data-pane="libros" class="hidden">
+      <div class="row2 adminOnly" style="margin-bottom:8px"><input id="lNew" placeholder="Nombre, ej: Misa del domingo"><button id="btnLNew" class="pri" style="flex:none">＋ Crear</button></div>
+      <div id="lList" class="list"></div>
+    </div>
+
+    <div data-pane="grab" class="hidden">
+      <p class="muted" style="margin-bottom:8px">Grabaciones del grupo y links a versiones originales. Para agregar, abrí una canción y tocá 🎧.</p>
+      <div id="grList" class="list"></div>
+    </div>
+
+    <div data-pane="miem" class="hidden">
+      <div class="card" style="text-align:center">
+        <p class="muted">Código para invitar al grupo</p>
+        <div class="bigcode" id="gCode"></div>
+        <button id="btnCopyCode">Copiar invitación</button>
+      </div>
+      <div id="mList" class="list" style="margin-top:10px"></div>
+      <button class="link" id="btnLeave" style="color:var(--rep)">Salir del grupo</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CANCIONERO ============ -->
+<section id="vLibro" class="view">
+  <div class="wrap">
+    <div class="hdr"><button id="btnLBack">‹</button><h2 id="lName"></h2></div>
+    <button class="big pri adminOnly" id="btnLDirigir">🎤 Dirigir con este cancionero</button>
+    <div id="liList" class="list"></div>
+    <div class="row2 adminOnly"><button id="btnLiAdd">＋ Agregar canciones</button><button id="btnLRen">Renombrar</button><button id="btnLDel" style="color:var(--rep)">Borrar</button></div>
+  </div>
+</section>
+
+<!-- ============ SALA / VISTA CANCIÓN ============ -->
+<section id="vSala" class="view">
+  <div id="top">
+    <div class="t">
+      <div id="songTitle">—</div>
+      <div id="meta"><span id="mSala">Sala <b id="mCode">—</b></span><span>Tono <b id="mKey">—</b></span><span id="songGroups"></span><span id="mConn"></span></div>
+    </div>
+    <button id="btnZoom" title="Zoom">🔍 1×</button>
+    <button id="btnBar" title="Mostrar u ocultar controles">🎛</button>
+    <button id="btnRecs" title="Grabaciones" class="hidden">🎧</button>
+    <button id="btnTuner" title="Afinador">🎸</button>
+    <button id="btnFull" title="Pantalla completa">⛶</button>
+    <button id="btnExit" title="Salir">✕</button>
+  </div>
+  <div id="song"></div>
+  <div id="bar"></div>
+</section>
+
+<!-- ============ MODALES ============ -->
+<div id="picker" class="modal hidden"><div class="box">
+  <input id="psearch" placeholder="Buscar canción…">
+  <div id="pgroups"></div>
+  <div id="plist" class="list" style="overflow:auto"></div>
+  <button id="pclose">Cerrar</button>
+</div></div>
+
+<div id="editor" class="modal hidden"><div class="box">
+  <div class="hdr"><h3 id="edH" style="flex:1">Canción</h3><button id="edX">✕</button></div>
+  <input id="edTit" placeholder="Título">
+  <div class="muted">Grupos (tocá para marcar o agregá uno)</div>
+  <div id="edChips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+  <div class="row2"><input id="edNewG" placeholder="Nuevo grupo, ej: María"><button id="edAddG" style="flex:none">Agregar</button></div>
+  <div class="muted">Letra y acordes: acordes en el renglón de arriba, o así: [Do]Letra. Renglón vacío entre estrofas.</div>
+  <textarea id="edTxt" spellcheck="false"></textarea>
+  <label class="chk"><input type="checkbox" id="edPub"> Compartir con todos los grupos (solo si no tiene derechos de autor)</label>
+  <div id="edMsg" style="color:var(--rep);font-size:14px"></div>
+  <div style="display:flex;gap:8px"><button id="edDel" style="color:#ff8a7a">Borrar</button><span style="flex:1"></span><button id="edCancel">Cancelar</button><button id="edSave" class="pri">Guardar</button></div>
+</div></div>
+
+<div id="tuner" class="modal hidden"><div class="box">
+  <div class="hdr"><h3 style="flex:1">🎸 Afinador</h3><button id="tuX">✕</button></div>
+  <div class="tabs"><button data-tt="mic" class="on">🎤 Escuchar</button><button data-tt="ear">🔊 De oído</button></div>
+  <div data-tp="mic">
+    <div id="tuNote">—</div>
+    <div id="tuInfo">Tocá "Empezar" y pulsá una cuerda</div>
+    <div id="tuMeter"><div id="tuCenter"></div><div id="tuNeedle"></div></div>
+    <button class="big pri" id="tuMic" style="margin-top:10px">Empezar a escuchar</button>
+  </div>
+  <div data-tp="ear" class="hidden" style="display:flex;flex-direction:column;gap:10px">
+    <select id="tuSel">
+      <option value="0">Estándar (Mi La Re Sol Si Mi)</option><option value="1">Medio tono abajo</option>
+      <option value="2">Un tono abajo</option><option value="3">Drop D (6ª en Re)</option>
+    </select>
+    <div id="tuStrings"></div>
+    <button id="tuLoop">🔁 Repetir nota: no</button>
+  </div>
+  <div class="grp" style="align-self:center"><button id="tuAm">−</button><span>La =<b id="tuA">440</b></span><button id="tuAp">+</button></div>
+</div></div>
+
+<div id="recs" class="modal hidden"><div class="box">
+  <div class="hdr"><h3 id="rcT" style="flex:1">🎧 Grabaciones</h3><button id="rcX">✕</button></div>
+  <div id="rcList" class="list"></div>
+  <div class="card" style="padding:14px;gap:8px">
+    <div class="row2"><button id="rcRec" class="pri">● Grabar ahora</button><button id="rcUp">⬆ Subir audio</button></div>
+    <input type="file" id="rcFile" accept="audio/*,video/mp4,video/webm" class="hidden">
+    <div id="rcRecInfo" class="muted hidden" style="text-align:center"></div>
+    <div class="row2"><input id="rcUrl" placeholder="Link de YouTube o Spotify"><button id="rcAddUrl" style="flex:none">Agregar</button></div>
+    <input id="rcName" placeholder="Nombre (opcional), ej: Ensayo sábado, Versión original">
+  </div>
+</div></div>
+
+<div id="dialog" class="modal hidden"><div class="box">
+  <h3 id="dlgT"></h3><div id="dlgB"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button id="dlgNo">Cancelar</button><button id="dlgOk" class="pri">Aceptar</button></div>
+</div></div>
+
+<div id="toast"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
