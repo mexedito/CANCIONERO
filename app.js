@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793832031';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793832249';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -398,7 +398,7 @@ $('btnLeave').onclick = async () => {
 };
 
 /* ===================== SALA EN VIVO / VISTA CANCIÓN ===================== */
-let S = { v: 1, song: null, t: 0, sec: -1, rep: false, playing: false, speed: 30, ts: 0, cola: [], qi: -1 };
+let S = { v: 1, song: null, t: 0, sec: -1, rep: false, playing: false, speed: 10, ts: 0, cola: [], qi: -1 };
 let L = Object.assign({ fs: 22, chords: true, extra: 0, follow: true, zoom: 1 }, lsGet('cv_local', {}));
 let mode = null, code = null, chan = null, peers = 1, live = false, salaGrupo = null, fromLibro = false;
 const songCache = {};
@@ -544,7 +544,7 @@ function scrollToSec(i) {
   el.animate([{ boxShadow: '0 0 0 0 rgba(240,194,100,.9)' }, { boxShadow: '0 0 0 14px rgba(240,194,100,0)' }], { duration: 900 });
 }
 function goSec(i) { const secs = S.song && parsedOf(S.song); if (!secs) return; S.sec = Math.max(0, Math.min(secs.length - 1, i)); S.rep = false; S.jump = Date.now(); publish(); scrollToSec(S.sec) }
-function setSong(song, tono, idx) { if (song && song.id) songCache[song.id] = song; S.qi = idx ?? -1; S.song = song ? { id: song.id, titulo: song.titulo, texto: song.texto, categorias: song.categorias || [] } : null; recSong = song && song.id ? song : null; S.t = tono || 0; S.sec = -1; S.rep = false; S.playing = false; window.scrollTo({ top: 0 }); scrollAcc = 0; publish() }
+function setSong(song, tono, idx) { if (song && song.id) songCache[song.id] = song; S.qi = idx ?? -1; S.song = song ? { id: song.id, titulo: song.titulo, texto: song.texto, categorias: song.categorias || [] } : null; recSong = song && song.id ? song : null; S.t = tono || 0; S.sec = -1; S.rep = false; S.playing = false; S.speed = 10; window.scrollTo({ top: 0 }); scrollAcc = 0; publish() }
 
 $('bar').addEventListener('click', e => {
   const a = e.target.closest('button')?.dataset.a; if (!a) return;
@@ -575,7 +575,7 @@ $('song').addEventListener('click', e => {
 
 /* Solo (ver una canción sin sala) */
 function openSolo(song, tono, list, idx) {
-  leaveSala(); mode = 'solo'; code = null; fromLibro = !!list; S = { v: 1, song: null, t: 0, sec: -1, rep: false, playing: false, speed: S.speed || 30, ts: 0, cola: [], qi: -1 }; if (list) { cacheSongs(list.map(x => x.song)); S.cola = list.map(x => toQ(x.song, x.tono)) }
+  leaveSala(); mode = 'solo'; code = null; fromLibro = !!list; S = { v: 1, song: null, t: 0, sec: -1, rep: false, playing: false, speed: 10, ts: 0, cola: [], qi: -1 }; if (list) { cacheSongs(list.map(x => x.song)); S.cola = list.map(x => toQ(x.song, x.tono)) }
   show('vSala'); setSong(song, tono, idx); setConn();
 }
 
@@ -591,7 +591,7 @@ async function startSala(list, grupoId) {
   }
   if (!ok) { toast('No se pudo crear la sala, probá de nuevo'); return }
   code = c; lsSet('cv_sala_' + grupoId, c);
-  S = { v: 1, song: null, t: 0, sec: -1, rep: false, playing: false, speed: 30, ts: 0, cola: [], qi: -1 };
+  S = { v: 1, song: null, t: 0, sec: -1, rep: false, playing: false, speed: 10, ts: 0, cola: [], qi: -1 };
   show('vSala'); render(); setConn(); connect(c);
   if (list && list.length) { cacheSongs(list.map(x => x.song)); S.cola = list.map(x => toQ(x.song, x.tono)); setSong(list[0].song, list[0].tono, 0) } else publish();
   toast('Sala ' + c + ' abierta: pasá el código');
@@ -604,7 +604,7 @@ async function joinSala(c) {
   const { data, error } = await sb.from('salas').select('codigo,estado,director,grupo_id').eq('codigo', c).maybeSingle();
   if (error || !data) { toast('No existe la sala ' + c); return }
   leaveSala(); mode = data.director === app.user.id ? 'dir' : 'mus'; code = c; salaGrupo = data.grupo_id; fromLibro = false;
-  S = { v: 1, song: null, t: 0, sec: -1, rep: false, playing: false, speed: 30, ts: 0, cola: [], qi: -1 };
+  S = { v: 1, song: null, t: 0, sec: -1, rep: false, playing: false, speed: 10, ts: 0, cola: [], qi: -1 };
   if (mode === 'mus') { if (data.estado && data.estado.v === 1) S = Object.assign(S, data.estado) }
   else { const prev = lsGet('cv_dir_' + c, null); if (prev) S = Object.assign(S, prev) }
   show('vSala'); render(); setConn(); connect(c); keepAwake();
