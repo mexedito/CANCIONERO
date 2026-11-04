@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793828717';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793832031';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -528,15 +528,22 @@ function publish() {
 async function saveSala() { const { error } = await sb.from('salas').update({ estado: S, updated_at: new Date().toISOString() }).eq('codigo', code); if (error) console.log('sala', error) }
 function receive(p) {
   if (mode !== 'mus' || !p || p.v !== 1 || !(p.ts > S.ts)) return;
-  const songChanged = (p.song && p.song.titulo + p.song.texto) !== (S.song && S.song.titulo + S.song.texto), secChanged = p.sec !== S.sec || p.rep !== S.rep;
+  const songChanged = (p.song && p.song.titulo + p.song.texto) !== (S.song && S.song.titulo + S.song.texto), secChanged = p.sec !== S.sec || p.rep !== S.rep || (p.jump && p.jump !== S.jump);
   S = Object.assign({}, S, p); render();
   if (!L.follow) return;
   if (songChanged) { window.scrollTo({ top: 0 }); scrollAcc = 0 }
   else if (secChanged && S.sec >= 0) scrollToSec(S.sec);
   if (S.rep && secChanged) toast('↻ Repetir');
 }
-function scrollToSec(i) { const el = document.querySelector(`.sec[data-i="${i}"]`); if (!el) return; const y = el.getBoundingClientRect().top + window.scrollY - $('top').offsetHeight - 12; window.scrollTo({ top: y, behavior: 'smooth' }) }
-function goSec(i) { const secs = S.song && parsedOf(S.song); if (!secs) return; S.sec = Math.max(0, Math.min(secs.length - 1, i)); S.rep = false; publish(); scrollToSec(S.sec) }
+let holdUntil = 0;
+function scrollToSec(i) {
+  const el = document.querySelector(`.sec[data-i="${i}"]`); if (!el) return;
+  const y = el.getBoundingClientRect().top + window.scrollY - $('top').offsetHeight - 12;
+  window.scrollTo({ top: Math.max(0, y), behavior: 'auto' }); scrollAcc = 0;
+  if (S.playing) holdUntil = performance.now() + 1500;
+  el.animate([{ boxShadow: '0 0 0 0 rgba(240,194,100,.9)' }, { boxShadow: '0 0 0 14px rgba(240,194,100,0)' }], { duration: 900 });
+}
+function goSec(i) { const secs = S.song && parsedOf(S.song); if (!secs) return; S.sec = Math.max(0, Math.min(secs.length - 1, i)); S.rep = false; S.jump = Date.now(); publish(); scrollToSec(S.sec) }
 function setSong(song, tono, idx) { if (song && song.id) songCache[song.id] = song; S.qi = idx ?? -1; S.song = song ? { id: song.id, titulo: song.titulo, texto: song.texto, categorias: song.categorias || [] } : null; recSong = song && song.id ? song : null; S.t = tono || 0; S.sec = -1; S.rep = false; S.playing = false; window.scrollTo({ top: 0 }); scrollAcc = 0; publish() }
 
 $('bar').addEventListener('click', e => {
@@ -549,7 +556,7 @@ $('bar').addEventListener('click', e => {
     if (a === 'prev') goSec(S.sec - 1);
     if (a === 'next') goSec(S.sec + 1);
     if (a === 'sprev' || a === 'snext') { const j = (S.qi ?? -1) + (a === 'snext' ? 1 : -1); if (j >= 0 && j < S.cola.length) playQ(j); else toast(a === 'snext' ? 'No hay más en la cola' : 'Es la primera') }
-    if (a === 'rep') { if (S.sec < 0) { toast('Primero tocá una estrofa'); return } S.rep = !S.rep; publish(); if (S.rep) scrollToSec(S.sec) }
+    if (a === 'rep') { if (S.sec < 0) { toast('Primero tocá una estrofa'); return } S.rep = true; S.jump = Date.now(); publish(); scrollToSec(S.sec) }
     if (a === 'play') { if (!S.song) { toast('Elegí una canción'); return } S.playing = !S.playing; publish() }
   } else {
     if (a === 'f-') L.fs = Math.max(14, L.fs - 2);
@@ -563,7 +570,7 @@ $('bar').addEventListener('click', e => {
 });
 $('song').addEventListener('click', e => {
   if (mode !== 'dir' && mode !== 'solo') return; const s = e.target.closest('.sec'); if (!s) return;
-  const i = +s.dataset.i; if (i === S.sec) { S.rep = !S.rep; publish(); return } goSec(i);
+  const i = +s.dataset.i; if (i === S.sec) { S.rep = !S.rep; S.jump = Date.now(); publish(); if (S.rep) scrollToSec(i); return } goSec(i);
 });
 
 /* Solo (ver una canción sin sala) */
@@ -667,7 +674,7 @@ $('pclose').onclick = async () => {
 /* Avance automático */
 let lastT = null, scrollAcc = 0;
 function loop(t) {
-  if (lastT != null && S.playing && S.song && mode && (mode !== 'mus' || L.follow)) { scrollAcc += S.speed * (t - lastT) / 1000; if (scrollAcc >= 1) { const d = Math.floor(scrollAcc); window.scrollBy(0, d); scrollAcc -= d } }
+  if (lastT != null && S.playing && S.song && mode && (mode !== 'mus' || L.follow) && t > holdUntil) { scrollAcc += S.speed * (t - lastT) / 1000; if (scrollAcc >= 1) { const d = Math.floor(scrollAcc); window.scrollBy(0, d); scrollAcc -= d } }
   lastT = t; requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
