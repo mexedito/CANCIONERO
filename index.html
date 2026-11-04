@@ -182,6 +182,13 @@ label.chk input{width:22px;height:22px}
 #tuNote{text-align:center;font-family:var(--serif);font-size:54px;font-weight:700;line-height:1}
 #tuInfo{text-align:center;color:var(--mut);font-size:14px}
 #tuNote.ok{color:var(--ok)}
+@media (max-width:700px){
+  #top{flex-wrap:wrap;gap:6px;padding:8px 10px}
+  #top .t{flex:1 1 100%}
+  #top button{min-height:34px;padding:4px 9px;font-size:15px}
+  #top #btnExit{margin-left:auto}
+  #meta{gap:4px 10px}
+}
 #cGroups,#pgroups{scrollbar-width:none}
 #cGroups::-webkit-scrollbar,#pgroups::-webkit-scrollbar{display:none}
 .rec{flex-direction:column;align-items:stretch}
@@ -295,8 +302,9 @@ label.chk input{width:22px;height:22px}
   <div id="top">
     <div class="t">
       <div id="songTitle">—</div>
-      <div id="meta"><span id="mSala">Sala <b id="mCode">—</b></span><span>Tono <b id="mKey">—</b></span><span id="songGroups"></span><span id="mConn"></span></div>
+      <div id="meta"><span id="mSala">Sala <b id="mCode">—</b></span><span>Tono <b id="mKey">—</b></span><span id="songGroups"></span><span id="mNext" style="color:var(--acc2)"></span><span id="mConn"></span></div>
     </div>
+    <button id="btnCola" title="Cola de canciones">📋</button>
     <button id="btnZoom" title="Zoom">🔍 1×</button>
     <button id="btnBar" title="Mostrar u ocultar controles">🎛</button>
     <button id="btnRecs" title="Grabaciones" class="hidden">🎧</button>
@@ -359,6 +367,12 @@ label.chk input{width:22px;height:22px}
     <div class="row2"><input id="rcUrl" placeholder="Link de YouTube o Spotify"><button id="rcAddUrl" style="flex:none">Agregar</button></div>
     <input id="rcName" placeholder="Nombre (opcional), ej: Ensayo sábado, Versión original">
   </div>
+</div></div>
+
+<div id="cola" class="modal hidden"><div class="box">
+  <div class="hdr"><h3 style="flex:1">📋 Cola de canciones</h3><button id="qX">✕</button></div>
+  <div id="qList" class="list"></div>
+  <button id="qAdd" class="pri">＋ Agregar canciones a la cola</button>
 </div></div>
 
 <div id="dialog" class="modal hidden"><div class="box">
