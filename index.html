@@ -403,6 +403,10 @@ label.chk input{width:22px;height:22px}
     <label class="chk"><input type="radio" name="impMode" value="add" checked> Agregar a las que ya tengo (si una canción ya existe con el mismo nombre, se actualiza)</label>
     <label class="chk"><input type="radio" name="impMode" value="replace"> Reemplazar todas las canciones del grupo</label>
     <label class="chk"><input type="checkbox" id="impRenum" checked> Numerar de corrido (1, 2, 3…)</label>
+    <div class="muted">Para que no se mezclen con otras (opcional):</div>
+    <input id="impTag" placeholder="Ponerles un grupo, ej: Misa">
+    <label class="chk"><input type="checkbox" id="impBook"> Crear también un cancionero con estas canciones, en este orden</label>
+    <input id="impBookName" class="hidden" placeholder="Nombre del cancionero, ej: Cancionero de la Misa">
     <button class="big pri" id="impGo">Importar</button>
   </div>
   <div id="impMsg" class="muted"></div>
@@ -414,6 +418,6 @@ label.chk input{width:22px;height:22px}
 </div></div>
 
 <div id="toast"></div>
-<script type="module" src="app.js?v=1793913632"></script>
+<script type="module" src="app.js?v=1793913785"></script>
 </body>
 </html>

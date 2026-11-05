@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793913632';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793913785';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -517,10 +517,12 @@ $('impFile').onchange = async () => {
   try { const lines = /\.txt$/i.test(f.name) ? (await f.text()).split(/\r?\n/) : await docxLines(f); showImp(splitSongs(lines)) }
   catch (e) { console.log(e); $('impMsg').textContent = 'No pude leer el archivo. Tiene que ser un Word .docx (no .doc viejo ni PDF).' }
 };
+$('impBook').onchange = () => $('impBookName').classList.toggle('hidden', !$('impBook').checked);
 $('impRead').onclick = () => showImp(splitSongs($('impTxt').value.split(/\r?\n/)));
 $('impGo').onclick = async () => {
   if (!impSongs.length) return;
   const replace = document.querySelector('input[name=impMode]:checked').value === 'replace', renum = $('impRenum').checked;
+  const tag = $('impTag').value.trim(), book = $('impBook').checked ? ($('impBookName').value.trim() || 'Cancionero importado') : '';
   if (replace && !await ask('¿Reemplazar todas las canciones?', `<p class="muted">Se borran las ${app.canciones.length} canciones actuales del grupo, y las grabaciones y cancioneros que las usen pierden esa canción. Después se cargan las ${impSongs.length} nuevas.</p>`, 'Reemplazar todo')) return;
   $('impGo').disabled = true; $('impMsg').textContent = 'Importando…';
   try {
@@ -532,12 +534,21 @@ $('impGo').onclick = async () => {
     const ins = [], upd = []; let n = start;
     impSongs.forEach((x, i) => {
       const ex = byName.get(norm(x.base));
-      if (ex) { upd.push({ id: ex.id, texto: x.texto, titulo: renum ? ex.titulo : `${x.num}. ${x.base}` }); return }
+      if (ex) { upd.push({ id: ex.id, i, texto: x.texto, titulo: renum ? ex.titulo : `${x.num}. ${x.base}` }); return }
       const num = renum ? (replace ? i + 1 : ++n) : x.num;
-      ins.push({ grupo_id: app.grupo.id, titulo: `${num}. ${x.base}`, texto: x.texto, categorias: x.categorias });
+      ins.push({ grupo_id: app.grupo.id, titulo: `${num}. ${x.base}`, texto: x.texto, categorias: tag ? [tag] : x.categorias, _i: i });
     });
-    for (let i = 0; i < ins.length; i += 40) { $('impMsg').textContent = `Cargando ${Math.min(i + 40, ins.length)} de ${ins.length}…`; const { error } = await sb.from('canciones').insert(ins.slice(i, i + 40)); if (error) throw error }
-    for (const [k, u] of upd.entries()) { $('impMsg').textContent = `Actualizando ${k + 1} de ${upd.length}…`; const { error } = await sb.from('canciones').update({ texto: u.texto, titulo: u.titulo }).eq('id', u.id); if (error) throw error }
+    const idAt = [];
+    for (let i = 0; i < ins.length; i += 40) { $('impMsg').textContent = `Cargando ${Math.min(i + 40, ins.length)} de ${ins.length}…`; const part = ins.slice(i, i + 40); const { data, error } = await sb.from('canciones').insert(part.map(({ _i, ...r }) => r)).select('id'); if (error) throw error; (data || []).forEach((d, k) => idAt[part[k]._i] = d.id) }
+    const curCats = new Map((app.canciones || []).map(c => [c.id, c.categorias || []]));
+    for (const [k, u] of upd.entries()) { $('impMsg').textContent = `Actualizando ${k + 1} de ${upd.length}…`; const row = { texto: u.texto, titulo: u.titulo }; if (tag) row.categorias = [...new Set([...(curCats.get(u.id) || []), tag])]; const { error } = await sb.from('canciones').update(row).eq('id', u.id); if (error) throw error; idAt[u.i] = u.id }
+    if (book) {
+      $('impMsg').textContent = 'Armando el cancionero…';
+      const { data: lb, error: e1 } = await sb.from('cancioneros').insert({ grupo_id: app.grupo.id, nombre: book }).select().single(); if (e1) throw e1;
+      const items = idAt.map((id, k) => id && ({ cancionero_id: lb.id, cancion_id: id, orden: k + 1, tono: 0 })).filter(Boolean);
+      for (let i = 0; i < items.length; i += 100) { const { error } = await sb.from('cancionero_items').insert(items.slice(i, i + 100)); if (error) throw error }
+      loadLibros();
+    }
     $('imp').classList.add('hidden'); toast(`Listo: ${ins.length} nuevas${upd.length ? ', ' + upd.length + ' actualizadas' : ''} ✓`); loadCanciones();
   } catch (e) { console.log(e); $('impMsg').textContent = 'Error al importar: ' + errMsg(e) }
   finally { $('impGo').disabled = false }
