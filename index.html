@@ -401,8 +401,9 @@ label.chk input{width:22px;height:22px}
   <div id="impRes" class="hidden" style="display:flex;flex-direction:column;gap:10px">
     <div id="impSum" style="font-weight:700"></div>
     <div id="impList" class="list" style="max-height:30vh;overflow:auto"></div>
-    <label class="chk"><input type="radio" name="impMode" value="add" checked> Agregar a las que ya tengo (si una canción ya existe con el mismo nombre, se actualiza)</label>
+    <label class="chk"><input type="radio" name="impMode" value="add" checked> Agregar a las que ya tengo (no se borra ni se cambia ninguna)</label>
     <label class="chk"><input type="radio" name="impMode" value="replace"> Reemplazar todas las canciones del grupo</label>
+    <label class="chk" style="font-size:14px"><input type="checkbox" id="impUpd"> Si hay una canción con el mismo nombre, reemplazar su letra por la del archivo</label>
     <label class="chk"><input type="checkbox" id="impRenum" checked> Numerar de corrido (1, 2, 3…)</label>
     <div class="muted">Para que no se mezclen con otras (opcional):</div>
     <input id="impTag" placeholder="Ponerles un grupo, ej: Misa">
@@ -419,6 +420,6 @@ label.chk input{width:22px;height:22px}
 </div></div>
 
 <div id="toast"></div>
-<script type="module" src="app.js?v=1793917939"></script>
+<script type="module" src="app.js?v=1793918554"></script>
 </body>
 </html>

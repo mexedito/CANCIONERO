@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793917939';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793918554';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -11,9 +11,9 @@ const LA_F=['Do','Reb','Re','Mib','Mi','Fa','Solb','Sol','Lab','La','Sib','Si'];
 const BASE={C:0,D:2,E:4,F:5,G:7,A:9,B:11,DO:0,RE:2,MI:4,FA:5,SOL:7,LA:9,SI:11};
 const ROOT='([Dd][Oo]|[Rr][Ee]|[Mm][Ii]|[Ff][Aa]|[Ss][Oo][Ll]|[Ll][Aa]|[Ss][Ii]|[A-G])';
 const CH_RE=new RegExp('^'+ROOT+'([#b]?)([^\\s\\/]*)(?:\\/'+ROOT+'([#b]?))?$');
-const QUAL_RE=/^(m|min|maj|dim|aug|sus|add|º|°|\+|\d|\(|\)|#|b)*$/i;
+const QUAL_RE=/^(m|min|maj|dim|aug|sus|add|º|°|\+|\d|\(|\)|#|b|-)*$/i;
 const IGN_RE=/^(\/+|\|+|x?\d+x?|%|\.+|:)$/i;
-const SPLIT_RE=/[()\-,.]+/;
+const SPLIT_RE=/[(),.]+|-(?=[A-Ga-gDdRrMmFfSsLl])|\s+-\s*/;
 
 function parseChord(tok){
   const m=tok.match(CH_RE); if(!m||!QUAL_RE.test(m[3]))return null;
@@ -484,7 +484,10 @@ function splitSongs(lines) {
     if (cur) cur.lines.push(l);
   }
   const seen = new Set(), out = [];
+  const best = new Map();
+  for (const s of songs) { const c = s.lines.filter(l => l.trim()).length; const b = best.get(s.num); if (!b || c > b.c) best.set(s.num, { s, c }) }
   for (const s of songs) {
+    if (best.get(s.num).s !== s || best.get(s.num).c < 2) continue;
     while (s.lines.length && !s.lines[0].trim()) s.lines.shift();
     while (s.lines.length && !s.lines[s.lines.length - 1].trim()) s.lines.pop();
     const texto = s.lines.join('\n').replace(/\n\s*\n(\s*\n)+/g, '\n\n');
@@ -511,12 +514,17 @@ async function docxLines(file) {
 async function pdfLines(file, msg) {
   const pdfjs = await import('./lib/pdf.min.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = new URL('./lib/pdf.worker.min.mjs', import.meta.url).href;
-  const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise; const lines = [];
+  const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise; const pages = [];
+  let withText = 0;
+  for (let n = 1; n <= Math.min(doc.numPages, 12); n++) { const tc = await (await doc.getPage(n)).getTextContent(); if (tc.items.map(i => i.str).join('').trim().length >= 20) withText++ }
+  const scanned = withText < Math.min(doc.numPages, 12) / 2;
   for (let n = 1; n <= doc.numPages; n++) {
+    const lines = []; pages.push(lines);
     msg(`Leyendo página ${n} de ${doc.numPages}…`);
     const pg = await doc.getPage(n), vp = pg.getViewport({ scale: 1 }), tc = await pg.getTextContent();
     const items = tc.items.filter(it => it.str && it.str.trim());
     if (items.map(it => it.str).join('').trim().length < 20) {
+      if (!scanned) continue; // página con dibujo o tapa: se saltea
       // página escaneada: leerla como foto
       msg(`Página ${n} de ${doc.numPages}: es una imagen, la leo como foto…`);
       const v2 = pg.getViewport({ scale: 2.2 }), c = document.createElement('canvas'); c.width = v2.width; c.height = v2.height;
@@ -531,15 +539,16 @@ async function pdfLines(file, msg) {
       const re = /\S+/g; let m;
       while ((m = re.exec(it.str))) W.push({ t: m[0], x0: x + it.width * (m.index / len), x1: x + it.width * ((m.index + m[0].length) / len), y, h });
     }
-    // ¿dos columnas? buscar una franja vertical vacía cerca del medio
+    // ¿dos columnas? buscar la línea vertical cerca del medio que menos palabras corte
     let cols = [W];
-    const pw = vp.width;
-    for (let f = 0.35; f <= 0.65; f += 0.01) {
-      const sx = pw * f;
-      if (W.some(w => w.x0 < sx && w.x1 > sx)) continue;
-      const left = W.filter(w => w.x1 <= sx), right = W.filter(w => w.x0 >= sx);
-      if (left.length > W.length * 0.15 && right.length > W.length * 0.15) { cols = [left, right]; break }
+    const pw = vp.width; let bestX = 0, bestC = 1e9;
+    for (let f = 0.3; f <= 0.7; f += 0.005) {
+      const sx = pw * f, c = W.filter(w => w.x0 < sx - 1 && w.x1 > sx + 1).length;
+      const left = W.filter(w => (w.x0 + w.x1) / 2 < sx).length;
+      if (left < W.length * 0.15 || left > W.length * 0.85) continue;
+      if (c < bestC || (c === bestC && Math.abs(f - 0.5) < Math.abs(bestX / pw - 0.5))) { bestC = c; bestX = sx }
     }
+    if (bestX && bestC <= Math.max(2, W.length * 0.03)) cols = [W.filter(w => (w.x0 + w.x1) / 2 < bestX), W.filter(w => (w.x0 + w.x1) / 2 >= bestX)];
     let txt = '';
     for (const cw of cols) {
       const rows = [];
@@ -552,7 +561,12 @@ async function pdfLines(file, msg) {
     }
     lines.push(...txt.split('\n'), '');
   }
-  return lines;
+  // sacar encabezados y pies de página que se repiten
+  const key = l => norm(l).replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
+  const cnt = new Map();
+  pages.forEach(pl => new Set(pl.map(key).filter(Boolean)).forEach(k => cnt.set(k, (cnt.get(k) || 0) + 1)));
+  const minRep = Math.max(3, Math.ceil(pages.length * 0.2));
+  return pages.flatMap(pl => pl.filter(l => { const k = key(l); return !(k && (cnt.get(k) >= minRep || /^#$/.test(k) || /^(cancionero|indice)$/.test(k))) }));
 }
 function showImp(songs) {
   impSongs = songs;
@@ -583,9 +597,11 @@ $('impGo').onclick = async () => {
     let start = 0;
     if (replace) { const { error } = await sb.from('canciones').delete().eq('grupo_id', app.grupo.id); if (error) throw error }
     else start = (cur || []).reduce((m, x) => Math.max(m, numOf(x.titulo) < 1e9 ? numOf(x.titulo) : 0), 0);
-    const byName = new Map(replace ? [] : (cur || []).map(x => [norm(stripNum(x.titulo)), x]));
+    const byName = new Map(replace || !$('impUpd').checked ? [] : (cur || []).map(x => [norm(stripNum(x.titulo)), x]));
+    const sameText = new Set(replace ? [] : (app.canciones || []).map(x => norm(x.texto || '')));
     const ins = [], upd = []; let n = start;
     impSongs.forEach((x, i) => {
+      if (!replace && sameText.has(norm(x.texto))) return;
       const ex = byName.get(norm(x.base));
       if (ex) { upd.push({ id: ex.id, i, texto: x.texto, titulo: renum ? ex.titulo : `${x.num}. ${x.base}` }); return }
       const num = renum ? (replace ? i + 1 : ++n) : x.num;
@@ -730,7 +746,7 @@ function render() {
   }
   const fc = firstChord(secs);
   let flat = usesFlats(secs);
-  if (fc) { const p = parseChord(fc); const k = ((noteIdx(p.root, p.acc) + n) % 12 + 12) % 12; const minor = /^m(?!aj)/.test(p.q); if (n !== 0) flat = minor ? [0, 2, 5, 7, 10].includes(k) : [5, 10, 3, 8, 1].includes(k) }
+  if (fc) { const p = parseChord(fc); const k = ((noteIdx(p.root, p.acc) + n) % 12 + 12) % 12; const minor = /^(m(?!aj)|-)/.test(p.q); if (n !== 0) flat = minor ? [0, 2, 5, 7, 10].includes(k) : [5, 10, 3, 8, 1].includes(k) }
   $('songTitle').textContent = sg.titulo;
   $('songGroups').innerHTML = (sg.categorias || []).map(chip).join('');
   $('mKey').textContent = fc ? trChord(fc, n, flat) : '—';
@@ -1164,4 +1180,4 @@ window.addEventListener('popstate', e => {
   show(v, false);
 });
 
-window.__app = { app, sb, parseSong, render };
+window.__app = { app, sb, parseSong, render, splitSongs, pdfLines: (f) => pdfLines(f, () => { }) };
