@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793913785';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793914245';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -391,27 +391,28 @@ function fixChordTok(t) {
   if (/^[a-g][#b]?(m|7|maj7|sus\d?|dim|aug|\d)*$/.test(t)) return t[0].toUpperCase() + t.slice(1);
   return t;
 }
-function ocrToText(data) {
-  const raw = []; (data.blocks || []).forEach(b => (b.paragraphs || []).forEach(p => (p.lines || []).forEach(l => { if (l.words && l.words.length) raw.push(l) })));
-  if (!raw.length) return (data.text || '').trim();
+// Arma el texto (acordes arriba de la letra) a partir de palabras con posición
+function layoutWords(raw) {
+  raw = raw.filter(l => l.words.length);
+  if (!raw.length) return '';
   const words = raw.flatMap(l => l.words);
-  const cw = median(words.filter(w => w.text.length >= 3).map(w => (w.bbox.x1 - w.bbox.x0) / w.text.length)) || 12;
-  const minX = Math.min(...words.map(w => w.bbox.x0));
-  const lh = median(raw.map(l => l.bbox.y1 - l.bbox.y0)) || 20;
-  raw.sort((a, b) => a.bbox.y0 - b.bbox.y0);
+  const cw = median(words.filter(w => w.t.length >= 3).map(w => (w.x1 - w.x0) / w.t.length)) || 12;
+  const minX = Math.min(...words.map(w => w.x0));
+  const lh = median(raw.map(l => l.y1 - l.y0)) || 20;
+  raw.sort((a, b) => a.y0 - b.y0);
   const L = raw.map(l => {
-    const ws = [...l.words].sort((a, b) => a.bbox.x0 - b.bbox.x0).map(w => ({ t: w.text.replace(/[|]/g, '').trim(), x0: w.bbox.x0, x1: w.bbox.x1 })).filter(w => w.t);
+    const ws = [...l.words].sort((a, b) => a.x0 - b.x0).map(w => ({ ...w, t: w.t.replace(/[|]/g, '').trim() })).filter(w => w.t);
     const fixed = ws.map(w => ({ ...w, t: fixChordTok(w.t) }));
-    const chordy = fixed.length && fixed.filter(w => tokenKind(w.t) > 0).length / fixed.length >= 0.6 && ws.length <= 10;
-    return { ws: chordy ? fixed : ws, chordy, y0: l.bbox.y0, y1: l.bbox.y1 };
+    const chordy = fixed.length && !/^\d+\s*[.\-–]?$/.test(ws[0].t) && fixed.filter(w => tokenKind(w.t) === 2).length / fixed.length >= 0.6 && ws.length <= 10;
+    return { ws: chordy ? fixed : ws, chordy, y0: l.y0, y1: l.y1 };
   });
+  const gaps = L.slice(1).map((l, i) => l.y0 - L[i].y1), gapLim = median(gaps) + lh * 0.6;
   const out = []; let prevY = null;
   for (let i = 0; i < L.length; i++) {
     const l = L[i];
-    if (prevY != null && l.y0 - prevY > lh * 1.1) out.push('');
+    if (prevY != null && l.y0 - prevY > gapLim) out.push('');
     const nx = L[i + 1];
-    if (l.chordy && nx && !nx.chordy && nx.y0 - l.y1 < lh * 1.1) {
-      // letra de abajo: posición x de cada carácter
+    if (l.chordy && nx && !nx.chordy && nx.y0 - l.y1 < gapLim) {
       let txt = '', xs = [];
       nx.ws.forEach((w, k) => {
         if (k) { txt += ' '; xs.push((nx.ws[k - 1].x1 + w.x0) / 2) }
@@ -431,6 +432,10 @@ function ocrToText(data) {
     prevY = l.y1;
   }
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+function ocrToText(data) {
+  const raw = []; (data.blocks || []).forEach(b => (b.paragraphs || []).forEach(p => (p.lines || []).forEach(l => { if (l.words && l.words.length) raw.push({ words: l.words.map(w => ({ t: w.text, x0: w.bbox.x0, x1: w.bbox.x1 })), y0: l.bbox.y0, y1: l.bbox.y1 }) })));
+  return raw.length ? layoutWords(raw) : (data.text || '').trim();
 }
 $('edOcr').onclick = () => $('edOcrFile').click();
 $('edOcrFile').onchange = async () => {
@@ -470,10 +475,12 @@ function splitSongs(lines) {
     l = l.replace(/ /g, ' ').replace(/\t/g, '    ').replace(/\s+$/, '');
     const m = l.match(IMP_TIT);
     if (m && !isChordLine(l)) {
-      const parts = m[3].trim().split(/\s{3,}/); const title = parts[0].trim();
-      cur = { num: m[1] + (m[2] ? ' bis' : ''), base: niceTitle(title), lines: parts[1] && isChordLine(parts[1]) ? ['Intro: ' + parts[1].trim()] : [] };
+      const parts = m[3].trim().split(/\s{3,}/); let title = parts[0].trim();
+      { const tk = title.split(/\s+/); let k = tk.length; while (k > 1 && tokenKind(tk[k - 1]) === 2) k--; if (tk.length - k >= 2) { parts[1] = (tk.slice(k).join(' ') + ' ' + (parts[1] || '')).trim(); title = tk.slice(0, k).join(' ') } }
+      cur = { num: m[1] + (m[2] ? ' bis' : ''), raw: title, base: niceTitle(title), lines: parts[1] && isChordLine(parts[1]) ? ['Intro: ' + parts[1].trim()] : [] };
       songs.push(cur); continue;
     }
+    if (cur && !cur.lines.length && cur.raw === cur.raw.toUpperCase() && l.trim() && l.trim() === l.trim().toUpperCase() && /[A-ZÁÉÍÓÚÑ]{3}/.test(l) && !isChordLine(l) && !LABEL_RE.test(l) && l.trim().split(/\s+/).length <= 4) { cur.raw += ' ' + l.trim(); cur.base = niceTitle(cur.raw); continue }
     if (cur) cur.lines.push(l);
   }
   const seen = new Set(), out = [];
@@ -501,6 +508,52 @@ async function docxLines(file) {
   }
   return lines;
 }
+async function pdfLines(file, msg) {
+  const pdfjs = await import('./lib/pdf.min.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL('./lib/pdf.worker.min.mjs', import.meta.url).href;
+  const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise; const lines = [];
+  for (let n = 1; n <= doc.numPages; n++) {
+    msg(`Leyendo página ${n} de ${doc.numPages}…`);
+    const pg = await doc.getPage(n), vp = pg.getViewport({ scale: 1 }), tc = await pg.getTextContent();
+    const items = tc.items.filter(it => it.str && it.str.trim());
+    if (items.map(it => it.str).join('').trim().length < 20) {
+      // página escaneada: leerla como foto
+      msg(`Página ${n} de ${doc.numPages}: es una imagen, la leo como foto…`);
+      const v2 = pg.getViewport({ scale: 2.2 }), c = document.createElement('canvas'); c.width = v2.width; c.height = v2.height;
+      await pg.render({ canvasContext: c.getContext('2d'), viewport: v2 }).promise;
+      const w = await getOcr(); const { data } = await w.recognize(await toJpeg(c, 2400), {}, { blocks: true, text: true });
+      lines.push(...ocrToText(data).split('\n'), ''); continue;
+    }
+    // palabras con posición
+    const W = [];
+    for (const it of items) {
+      const h = Math.abs(it.transform[3]) || it.height || 10, y = vp.height - it.transform[5], x = it.transform[4], len = it.str.length;
+      const re = /\S+/g; let m;
+      while ((m = re.exec(it.str))) W.push({ t: m[0], x0: x + it.width * (m.index / len), x1: x + it.width * ((m.index + m[0].length) / len), y, h });
+    }
+    // ¿dos columnas? buscar una franja vertical vacía cerca del medio
+    let cols = [W];
+    const pw = vp.width;
+    for (let f = 0.35; f <= 0.65; f += 0.01) {
+      const sx = pw * f;
+      if (W.some(w => w.x0 < sx && w.x1 > sx)) continue;
+      const left = W.filter(w => w.x1 <= sx), right = W.filter(w => w.x0 >= sx);
+      if (left.length > W.length * 0.15 && right.length > W.length * 0.15) { cols = [left, right]; break }
+    }
+    let txt = '';
+    for (const cw of cols) {
+      const rows = [];
+      for (const w of [...cw].sort((a, b) => a.y - b.y)) {
+        let row = rows.find(r => Math.abs(r.yb - w.y) < w.h * 0.45);
+        if (!row) { row = { yb: w.y, h: w.h, words: [] }; rows.push(row) }
+        row.words.push(w);
+      }
+      txt += layoutWords(rows.map(r => ({ words: r.words, y0: r.yb - r.h, y1: r.yb }))) + '\n';
+    }
+    lines.push(...txt.split('\n'), '');
+  }
+  return lines;
+}
 function showImp(songs) {
   impSongs = songs;
   $('impRes').classList.toggle('hidden', !songs.length);
@@ -514,8 +567,8 @@ $('impPick').onclick = () => $('impFile').click();
 $('impFile').onchange = async () => {
   const f = $('impFile').files[0]; $('impFile').value = ''; if (!f) return;
   $('impMsg').textContent = 'Leyendo ' + f.name + '…';
-  try { const lines = /\.txt$/i.test(f.name) ? (await f.text()).split(/\r?\n/) : await docxLines(f); showImp(splitSongs(lines)) }
-  catch (e) { console.log(e); $('impMsg').textContent = 'No pude leer el archivo. Tiene que ser un Word .docx (no .doc viejo ni PDF).' }
+  try { const lines = /\.txt$/i.test(f.name) ? (await f.text()).split(/\r?\n/) : /\.pdf$/i.test(f.name) || f.type === 'application/pdf' ? await pdfLines(f, t => $('impMsg').textContent = t) : await docxLines(f); showImp(splitSongs(lines)) }
+  catch (e) { console.log(e); $('impMsg').textContent = 'No pude leer el archivo. Tiene que ser Word (.docx) o PDF.' }
 };
 $('impBook').onchange = () => $('impBookName').classList.toggle('hidden', !$('impBook').checked);
 $('impRead').onclick = () => showImp(splitSongs($('impTxt').value.split(/\r?\n/)));
