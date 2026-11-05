@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793832249';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793839616';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -251,7 +251,7 @@ document.querySelector('#vGrupo .tabs').addEventListener('click', e => { const t
 
 /* ----- Canciones ----- */
 async function loadCanciones() {
-  const q = sb.from('canciones').select('id,grupo_id,titulo,texto,categorias,publica');
+  const q = sb.from('canciones').select('id,grupo_id,titulo,texto,categorias,publica,adjuntos');
   const { data, error } = app.publicas ? await q.eq('publica', true).neq('grupo_id', app.grupo.id).limit(500) : await q.eq('grupo_id', app.grupo.id);
   if (error) { toast(errMsg(error)); return }
   app.canciones = (data || []).sort(bySong); drawCanciones();
@@ -266,7 +266,7 @@ function drawCanciones() {
   $('cList').innerHTML = list.map(s => {
     const fc = firstChord(parsedOf(s)); const c0 = (s.categorias || [])[0] || '';
     const act = app.publicas ? (isAdmin() ? `<button data-copy="${s.id}">＋ Copiar</button>` : '') : (isAdmin() ? `<button data-edit="${s.id}">✎</button>` : '');
-    return `<div class="item" style="--gc:${gColor(c0)}"><div class="main" data-open="${s.id}"><div class="t">${esc(s.titulo)}</div><div class="s">${(s.categorias || []).map(chip).join('')}${fc ? ' Tono ' + esc(fc) : ''}${s.publica && !app.publicas ? ' · 🌎' : ''}</div></div>${act}</div>`;
+    return `<div class="item" style="--gc:${gColor(c0)}"><div class="main" data-open="${s.id}"><div class="t">${esc(s.titulo)}${(s.adjuntos || []).length ? ' 📎' : ''}</div><div class="s">${(s.categorias || []).map(chip).join('')}${fc ? ' Tono ' + esc(fc) : ''}${s.publica && !app.publicas ? ' · 🌎' : ''}</div></div>${act}</div>`;
   }).join('') || `<p class="muted">${app.canciones.length ? 'No hay resultados' : app.publicas ? 'Todavía no hay canciones compartidas.' : 'Todavía no hay canciones. ' + (isAdmin() ? 'Tocá ＋ Nueva para cargar la primera.' : '')}</p>`;
 }
 $('cSearch').addEventListener('input', drawCanciones);
@@ -285,37 +285,165 @@ $('cList').addEventListener('click', async e => {
 $('btnCNew').onclick = () => openEditor(null);
 
 /* ----- Editor ----- */
-let edId = null, edCats = [], delArm = false;
+let edId = null, edCats = [], delArm = false, edAdj = [], edNew = [], edRemoved = [];
 function openEditor(id) {
   const s = id ? app.canciones.find(x => x.id === id) : null; edId = s ? s.id : null; delArm = false;
   $('edH').textContent = s ? 'Editar canción' : 'Nueva canción';
   $('edTit').value = s ? s.titulo : ''; $('edTxt').value = s ? s.texto : ''; $('edPub').checked = !!(s && s.publica);
   edCats = s ? [...(s.categorias || [])] : (app.cat ? [app.cat] : []);
+  edAdj = s ? [...(s.adjuntos || [])] : []; edNew = []; edRemoved = []; $('edOcrMsg').textContent = ''; drawAdj();
   $('edDel').classList.toggle('hidden', !s); $('edDel').textContent = 'Borrar'; $('edMsg').textContent = '';
   drawChips(); $('editor').classList.remove('hidden');
 }
 function drawChips() { const all = sortGroups([...catsOf(app.canciones), ...edCats]); $('edChips').innerHTML = all.map(g => `<button data-g="${esc(g)}" class="${edCats.includes(g) ? 'on' : ''}" style="border-radius:20px;padding:6px 12px;min-height:34px;font-size:14px">${esc(g)}</button>`).join('') }
 $('edChips').addEventListener('click', e => { const g = e.target.closest('button')?.dataset.g; if (g == null) return; edCats = edCats.includes(g) ? edCats.filter(x => x !== g) : [...edCats, g]; drawChips() });
 $('edAddG').onclick = () => { const g = $('edNewG').value.trim(); if (!g) return; if (!edCats.includes(g)) edCats.push(g); $('edNewG').value = ''; drawChips() };
-const closeEd = () => $('editor').classList.add('hidden');
-$('edX').onclick = closeEd; $('edCancel').onclick = closeEd;
+const closeEd = (saved) => { if (saved !== true && edNew.length) sb.storage.from('adjuntos').remove(edNew); edNew = []; $('editor').classList.add('hidden') };
+$('edX').onclick = () => closeEd(); $('edCancel').onclick = () => closeEd();
 $('edSave').onclick = async () => {
-  const row = { titulo: $('edTit').value.trim(), texto: $('edTxt').value.replace(/\s+$/, ''), categorias: edCats, publica: $('edPub').checked };
+  const row = { titulo: $('edTit').value.trim(), texto: $('edTxt').value.replace(/\s+$/, ''), categorias: edCats, publica: $('edPub').checked, adjuntos: edAdj };
   if (!row.titulo) { $('edMsg').textContent = 'Falta el título'; return }
-  if (!row.texto.trim()) { $('edMsg').textContent = 'Falta la letra'; return }
+  if (!row.texto.trim() && !edAdj.length) { $('edMsg').textContent = 'Falta la letra (o adjuntá una foto o PDF)'; return }
   $('edSave').disabled = true; $('edMsg').textContent = '';
   const { error } = edId ? await sb.from('canciones').update(row).eq('id', edId) : await sb.from('canciones').insert({ ...row, grupo_id: app.grupo.id });
   $('edSave').disabled = false;
   if (error) { $('edMsg').textContent = errMsg(error); return }
-  closeEd(); toast('Canción guardada ✓'); loadCanciones();
+  if (edRemoved.length) sb.storage.from('adjuntos').remove(edRemoved); edRemoved = [];
+  closeEd(true); toast('Canción guardada ✓'); loadCanciones();
 };
 $('edDel').onclick = async () => {
   if (!delArm) { delArm = true; $('edDel').textContent = '¿Seguro? Tocá otra vez'; return }
+  const gone = [...edAdj.map(a => a.path), ...edRemoved]; if (gone.length) await sb.storage.from('adjuntos').remove(gone);
   const { error } = await sb.from('canciones').delete().eq('id', edId);
   if (error) { $('edMsg').textContent = errMsg(error); return }
-  closeEd(); toast('Canción borrada'); loadCanciones();
+  closeEd(true); toast('Canción borrada'); loadCanciones();
 };
 
+/* ----- Fotos, PDF y lectura de fotos ----- */
+async function signedUrls(paths, secs = 3600) {
+  if (!paths.length) return [];
+  const { data, error } = await sb.storage.from('adjuntos').createSignedUrls(paths, secs);
+  return error ? [] : data.map(d => d.signedUrl);
+}
+async function drawAdj() {
+  if (!edAdj.length) { $('edAdj').innerHTML = ''; return }
+  $('edAdj').innerHTML = edAdj.map((a, i) => `<div class="th"><button data-rmadj="${i}">✕</button></div>`).join('');
+  const urls = await signedUrls(edAdj.map(a => a.path));
+  $('edAdj').innerHTML = edAdj.map((a, i) => `<div class="th"><img src="${esc(urls[i] || '')}" alt=""><button data-rmadj="${i}">✕</button></div>`).join('');
+}
+$('edAdj').addEventListener('click', e => { const b = e.target.closest('[data-rmadj]'); if (!b) return; const a = edAdj.splice(+b.dataset.rmadj, 1)[0]; if (a) edRemoved.push(a.path); drawAdj() });
+async function toJpeg(src, max = 1800) {
+  const bmp = src instanceof HTMLCanvasElement ? src : await createImageBitmap(src, { imageOrientation: 'from-image' });
+  const sc = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc);
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height);
+  return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+}
+async function uploadAdj(blob, nombre) {
+  const path = `${app.grupo.id}/${crypto.randomUUID()}.jpg`;
+  const { error } = await sb.storage.from('adjuntos').upload(path, blob, { contentType: 'image/jpeg' });
+  if (error) throw error; edNew.push(path); edAdj.push({ path, nombre });
+}
+async function pdfToCanvases(file) {
+  const pdfjs = await import('./lib/pdf.min.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL('./lib/pdf.worker.min.mjs', import.meta.url).href;
+  const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise; const out = [];
+  for (let i = 1; i <= Math.min(doc.numPages, 15); i++) {
+    const pg = await doc.getPage(i), vp = pg.getViewport({ scale: 2 });
+    const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+    await pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise; out.push(c);
+  }
+  return out;
+}
+$('edAttach').onclick = () => $('edAttFile').click();
+$('edAttFile').onchange = async () => {
+  const files = [...$('edAttFile').files]; $('edAttFile').value = '';
+  for (const f of files) {
+    try {
+      $('edOcrMsg').textContent = 'Subiendo ' + f.name + '…';
+      if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) { const cs = await pdfToCanvases(f); for (const [k, c] of cs.entries()) { $('edOcrMsg').textContent = `Subiendo página ${k + 1} de ${cs.length}…`; await uploadAdj(await toJpeg(c), f.name + ' p' + (k + 1)) } }
+      else await uploadAdj(await toJpeg(f), f.name);
+    } catch (e) { console.log(e); toast('No se pudo subir ' + f.name) }
+  }
+  $('edOcrMsg').textContent = edAdj.length ? '✓ Adjuntado. Tocá Guardar para que quede en la canción.' : ''; drawAdj();
+};
+function loadScript(src) { return new Promise((res, rej) => { if (window.Tesseract) return res(); const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc) }) }
+let ocrWorker = null, ocrProgress = null;
+async function getOcr() {
+  if (ocrWorker) return ocrWorker;
+  const base = new URL('./lib/', import.meta.url).href;
+  await loadScript(base + 'tesseract.min.js');
+  ocrWorker = await Tesseract.createWorker('spa', 1, { workerPath: base + 'worker.min.js', corePath: base, langPath: base, logger: m => ocrProgress && ocrProgress(m) });
+  await ocrWorker.setParameters({ preserve_interword_spaces: '1' });
+  return ocrWorker;
+}
+const median = a => { if (!a.length) return 0; const b = [...a].sort((x, y) => x - y); return b[Math.floor(b.length / 2)] };
+function fixChordTok(t) {
+  t = t.replace(/^[\(\[\{]+|[\)\]\}.,;:]+$/g, '');
+  const m = t.match(/^([A-Ga-g])\1$/i); if (m) return m[1].toUpperCase();
+  if (/^[a-g]$/.test(t)) return t.toUpperCase();
+  if (/^[a-g][#b]?(m|7|maj7|sus\d?|dim|aug|\d)*$/.test(t)) return t[0].toUpperCase() + t.slice(1);
+  return t;
+}
+function ocrToText(data) {
+  const raw = []; (data.blocks || []).forEach(b => (b.paragraphs || []).forEach(p => (p.lines || []).forEach(l => { if (l.words && l.words.length) raw.push(l) })));
+  if (!raw.length) return (data.text || '').trim();
+  const words = raw.flatMap(l => l.words);
+  const cw = median(words.filter(w => w.text.length >= 3).map(w => (w.bbox.x1 - w.bbox.x0) / w.text.length)) || 12;
+  const minX = Math.min(...words.map(w => w.bbox.x0));
+  const lh = median(raw.map(l => l.bbox.y1 - l.bbox.y0)) || 20;
+  raw.sort((a, b) => a.bbox.y0 - b.bbox.y0);
+  const L = raw.map(l => {
+    const ws = [...l.words].sort((a, b) => a.bbox.x0 - b.bbox.x0).map(w => ({ t: w.text.replace(/[|]/g, '').trim(), x0: w.bbox.x0, x1: w.bbox.x1 })).filter(w => w.t);
+    const fixed = ws.map(w => ({ ...w, t: fixChordTok(w.t) }));
+    const chordy = fixed.length && fixed.filter(w => tokenKind(w.t) > 0).length / fixed.length >= 0.6 && ws.length <= 10;
+    return { ws: chordy ? fixed : ws, chordy, y0: l.bbox.y0, y1: l.bbox.y1 };
+  });
+  const out = []; let prevY = null;
+  for (let i = 0; i < L.length; i++) {
+    const l = L[i];
+    if (prevY != null && l.y0 - prevY > lh * 1.1) out.push('');
+    const nx = L[i + 1];
+    if (l.chordy && nx && !nx.chordy && nx.y0 - l.y1 < lh * 1.1) {
+      // letra de abajo: posición x de cada carácter
+      let txt = '', xs = [];
+      nx.ws.forEach((w, k) => {
+        if (k) { txt += ' '; xs.push((nx.ws[k - 1].x1 + w.x0) / 2) }
+        const step = (w.x1 - w.x0) / Math.max(1, w.t.length);
+        for (let c = 0; c < w.t.length; c++) { txt += w.t[c]; xs.push(w.x0 + step * (c + .5)) }
+      });
+      let ch = '';
+      for (const w of l.ws) {
+        let best = 0, bd = 1e9; xs.forEach((x, k) => { const d = Math.abs(x - (w.x0 + Math.min(w.x1 - w.x0, cw) / 2)); if (d < bd) { bd = d; best = k } });
+        if (w.x0 > xs[xs.length - 1] + cw) best = Math.max(txt.length + 1, Math.round((w.x0 - minX) / cw));
+        const pos = Math.max(best, ch.length ? ch.length + 1 : 0); ch = ch.padEnd(pos, ' ') + w.t;
+      }
+      out.push(ch, txt); prevY = nx.y1; i++; continue;
+    }
+    if (l.chordy) { let ch = ''; for (const w of l.ws) { const col = Math.round((w.x0 - minX) / cw); ch = ch.padEnd(Math.max(col, ch.length ? ch.length + 2 : 0), ' ') + w.t } out.push(ch) }
+    else out.push(l.ws.map(w => w.t).join(' '));
+    prevY = l.y1;
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+$('edOcr').onclick = () => $('edOcrFile').click();
+$('edOcrFile').onchange = async () => {
+  const f = $('edOcrFile').files[0]; $('edOcrFile').value = ''; if (!f) return;
+  $('edOcr').disabled = true; $('edOcrMsg').textContent = 'Preparando el lector… (la primera vez tarda unos segundos)';
+  ocrProgress = m => { if (m.status === 'recognizing text') $('edOcrMsg').textContent = 'Leyendo la foto… ' + Math.round(m.progress * 100) + '%' };
+  try {
+    const w = await getOcr(); const img = await toJpeg(f, 2200);
+    const { data } = await w.recognize(img, {}, { blocks: true, text: true });
+    const txt = ocrToText(data);
+    if (!txt) { $('edOcrMsg').textContent = 'No pude leer texto. Probá con más luz, la hoja derecha y sin sombras.'; return }
+    let body = txt;
+    if (!$('edTit').value.trim()) { const lines = txt.split('\n'); if (lines[0] && !isChordLine(lines[0]) && (lines[1] || '') === '') { $('edTit').value = lines[0].trim().slice(0, 80); body = lines.slice(2).join('\n') } else { const first = lines.find(l => l.trim().length > 3 && !isChordLine(l)); if (first) $('edTit').value = first.trim().slice(0, 80) } }
+    const cur = $('edTxt').value.trim(); $('edTxt').value = cur ? cur + '\n\n' + body : body;
+    if ($('edKeepPhoto').checked) { await uploadAdj(img, 'Foto original'); drawAdj() }
+    $('edOcrMsg').textContent = '✓ Listo. Revisá la letra y que cada acorde quede arriba de la palabra correcta, y tocá Guardar.';
+  } catch (e) { console.log(e); $('edOcrMsg').textContent = 'No se pudo leer la foto: ' + errMsg(e) }
+  finally { $('edOcr').disabled = false; ocrProgress = null }
+};
 /* ----- Cancioneros ----- */
 async function loadLibros() {
   const { data, error } = await sb.from('cancioneros').select('id,nombre,cancionero_items(count)').eq('grupo_id', app.grupo.id).order('created_at', { ascending: false });
@@ -336,7 +464,7 @@ async function openLibro(id) {
   app.libro = l; $('lName').textContent = l.nombre; show('vLibro'); await loadItems();
 }
 async function loadItems() {
-  const { data, error } = await sb.from('cancionero_items').select('id,orden,tono,canciones(id,titulo,texto,categorias)').eq('cancionero_id', app.libro.id).order('orden');
+  const { data, error } = await sb.from('cancionero_items').select('id,orden,tono,canciones(id,titulo,texto,categorias,adjuntos)').eq('cancionero_id', app.libro.id).order('orden');
   if (error) { toast(errMsg(error)); return }
   app.items = (data || []).filter(i => i.canciones);
   $('liList').innerHTML = app.items.map((it, k) => {
@@ -406,7 +534,7 @@ const cacheSongs = list => list.forEach(x => { if (x && x.id) songCache[x.id] = 
 const toQ = (song, tono) => ({ k: Math.random().toString(36).slice(2, 9), id: song.id, titulo: song.titulo, tono: tono || 0 });
 async function songById(id) {
   if (songCache[id]) return songCache[id];
-  const { data } = await sb.from('canciones').select('id,titulo,texto,categorias').eq('id', id).maybeSingle();
+  const { data } = await sb.from('canciones').select('id,titulo,texto,categorias,adjuntos').eq('id', id).maybeSingle();
   if (data) songCache[id] = data; return data;
 }
 async function playQ(i) {
@@ -460,7 +588,10 @@ function render() {
     }
     h += '</div>';
   });
-  $('song').innerHTML = h + '</div>';
+  h += '</div>';
+  if (sg.adjUrls && sg.adjUrls.length) h += '<div class="adjs">' + sg.adjUrls.map(u => u ? `<img src="${esc(u)}" alt="" loading="lazy">` : '<p class="muted">No se pudo cargar esta imagen.</p>').join('') + '</div>';
+  else if (sg.adj && sg.adj.length) h += '<div class="empty" style="padding:20px">Cargando imágenes…</div>';
+  $('song').innerHTML = h;
   renderBar();
 }
 function renderBar() {
@@ -544,7 +675,7 @@ function scrollToSec(i) {
   el.animate([{ boxShadow: '0 0 0 0 rgba(240,194,100,.9)' }, { boxShadow: '0 0 0 14px rgba(240,194,100,0)' }], { duration: 900 });
 }
 function goSec(i) { const secs = S.song && parsedOf(S.song); if (!secs) return; S.sec = Math.max(0, Math.min(secs.length - 1, i)); S.rep = false; S.jump = Date.now(); publish(); scrollToSec(S.sec) }
-function setSong(song, tono, idx) { if (song && song.id) songCache[song.id] = song; S.qi = idx ?? -1; S.song = song ? { id: song.id, titulo: song.titulo, texto: song.texto, categorias: song.categorias || [] } : null; recSong = song && song.id ? song : null; S.t = tono || 0; S.sec = -1; S.rep = false; S.playing = false; S.speed = 10; window.scrollTo({ top: 0 }); scrollAcc = 0; publish() }
+function setSong(song, tono, idx) { if (song && song.id) songCache[song.id] = song; S.qi = idx ?? -1; S.song = song ? { id: song.id, titulo: song.titulo, texto: song.texto, categorias: song.categorias || [], adj: (song.adjuntos || []).map(a => a.path) } : null; if (S.song && S.song.adj.length) { const sid = song.id; signedUrls(S.song.adj, 6 * 3600).then(u => { if (S.song && S.song.id === sid) { S.song.adjUrls = u; publish() } }) } recSong = song && song.id ? song : null; S.t = tono || 0; S.sec = -1; S.rep = false; S.playing = false; S.speed = 10; window.scrollTo({ top: 0 }); scrollAcc = 0; publish() }
 
 $('bar').addEventListener('click', e => {
   const a = e.target.closest('button')?.dataset.a; if (!a) return;
@@ -635,7 +766,7 @@ let pMode = 'sala', pCat = '', pSel = new Set();
 async function openPicker(m) {
   pMode = m; pCat = ''; pSel = new Set(); $('psearch').value = '';
   if (m === 'sala' && salaGrupo && (!app.grupo || app.grupo.id !== salaGrupo || !app.canciones.length)) {
-    const { data } = await sb.from('canciones').select('id,titulo,texto,categorias').eq('grupo_id', salaGrupo); app.canciones = (data || []).sort(bySong);
+    const { data } = await sb.from('canciones').select('id,titulo,texto,categorias,adjuntos').eq('grupo_id', salaGrupo); app.canciones = (data || []).sort(bySong);
   }
   $('pclose').textContent = m === 'add' ? 'Agregar seleccionadas' : 'Cerrar';
   $('picker').classList.remove('hidden'); fillPicker();
