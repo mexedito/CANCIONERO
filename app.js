@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793839616';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793913434';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -116,7 +116,13 @@ const LS = (() => { try { const s = localStorage; s.setItem('_t', '1'); return s
 const lsGet = (k, d) => { try { const v = LS && LS.getItem(k); return v ? JSON.parse(v) : d } catch (e) { return d } };
 const lsSet = (k, v) => { try { LS && LS.setItem(k, JSON.stringify(v)) } catch (e) { } };
 function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('show'), 2400) }
-function show(id) { document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === id)); window.scrollTo(0, 0) }
+let curView = 'vLogin', popIgnore = false;
+try { history.replaceState({ v: 'vLogin' }, '') } catch (e) { }
+function show(id, push = true) {
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === id)); window.scrollTo(0, 0);
+  if (push && id !== curView) { try { history.pushState({ v: id }, '') } catch (e) { } }
+  curView = id;
+}
 const numOf = t => { const m = String(t).match(/^\s*(\d+)/); return m ? +m[1] : 1e9 };
 const bySong = (a, b) => numOf(a.titulo) - numOf(b.titulo) || a.titulo.localeCompare(b.titulo);
 function ask(title, bodyHtml, okText = 'Aceptar') {
@@ -768,7 +774,8 @@ async function openPicker(m) {
   if (m === 'sala' && salaGrupo && (!app.grupo || app.grupo.id !== salaGrupo || !app.canciones.length)) {
     const { data } = await sb.from('canciones').select('id,titulo,texto,categorias,adjuntos').eq('grupo_id', salaGrupo); app.canciones = (data || []).sort(bySong);
   }
-  $('pclose').textContent = m === 'add' ? 'Agregar seleccionadas' : 'Cerrar';
+  $('pTitle').textContent = m === 'add' ? 'Agregar al cancionero' : 'Canciones';
+  $('pclose').classList.toggle('hidden', m !== 'add'); $('pcancel').textContent = m === 'add' ? 'Cancelar' : 'Cerrar';
   $('picker').classList.remove('hidden'); fillPicker();
 }
 function fillPicker() {
@@ -776,6 +783,7 @@ function fillPicker() {
   const cats = catsOf(pool);
   $('pgroups').innerHTML = ['', ...cats].map(g => `<button data-g="${esc(g)}" class="${g === pCat ? 'on' : ''}" ${g ? `style="--gc:${gColor(g)}"` : ''}>${g ? esc(g) : 'Todas'}</button>`).join('');
   const q = norm($('psearch').value);
+  $('pclose').textContent = pSel.size ? `Agregar (${pSel.size})` : 'Agregar'; $('pclose').disabled = !pSel.size;
   const list = pool.filter(s => (!pCat || (s.categorias || []).includes(pCat)) && norm(s.titulo + ' ' + s.texto).includes(q));
   $('plist').innerHTML = list.map((s, k) => {
     const fc = firstChord(parsedOf(s)); const sel = pSel.has(s.id);
@@ -793,9 +801,10 @@ $('plist').addEventListener('click', e => {
   const sg = app.canciones.find(s => s.id === el.dataset.p); if (!sg) return;
   const at = S.qi + 1; S.cola.splice(at, 0, toQ(sg, 0)); setSong(sg, 0, at);
 });
+$('pX').onclick = $('pcancel').onclick = () => $('picker').classList.add('hidden');
 $('pclose').onclick = async () => {
-  $('picker').classList.add('hidden');
   if (pMode !== 'add' || !pSel.size) return;
+  $('picker').classList.add('hidden');
   let orden = app.items.reduce((m, x) => Math.max(m, x.orden), 0);
   const rows = [...pSel].map(id => ({ cancionero_id: app.libro.id, cancion_id: id, orden: ++orden, tono: 0 }));
   const { error } = await sb.from('cancionero_items').insert(rows);
@@ -966,5 +975,30 @@ $('rcRec').onclick = async () => {
   $('rcRecInfo').classList.remove('hidden');
   recTimer = setInterval(() => { const s = Math.floor((Date.now() - recStart) / 1000); $('rcRecInfo').textContent = `Grabando… ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; if (s >= 15 * 60) stopRecording(false) }, 500);
 };
+
+/* ===================== BOTÓN ATRÁS Y VENTANAS ===================== */
+const MODAL_CLOSE = { tuner: () => $('tuX').click(), recs: () => $('rcX').click(), editor: () => $('edX').click(), dialog: () => $('dlgNo').click() };
+const closeModal = m => (MODAL_CLOSE[m.id] || (() => m.classList.add('hidden')))();
+new MutationObserver(muts => {
+  for (const mu of muts) {
+    const el = mu.target; if (!el.classList || !el.classList.contains('modal')) continue;
+    const open = !el.classList.contains('hidden');
+    if (open && !el._pushed) { el._pushed = true; try { history.pushState({ v: curView, m: el.id }, '') } catch (e) { } }
+    else if (!open && el._pushed) { el._pushed = false; if (history.state && history.state.m === el.id) { popIgnore = true; history.back() } }
+  }
+}).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m && m.id !== 'editor') closeModal(m) }));
+window.addEventListener('popstate', e => {
+  if (popIgnore) { popIgnore = false; return }
+  const om = [...document.querySelectorAll('.modal:not(.hidden)')];
+  if (om.length) { om.forEach(m => { m._pushed = false; closeModal(m) }); return }
+  let v = (e.state && e.state.v) || 'vHome';
+  if (curView === 'vSala' && v !== 'vSala') { leaveSala(); if (document.fullscreenElement) document.exitFullscreen().catch(() => { }) }
+  if (!app.user) { show('vLogin', false); return }
+  if (v === 'vLogin') v = 'vHome';
+  if (v === 'vSala' && !mode) v = app.grupo ? 'vGrupo' : 'vHome';
+  if ((v === 'vGrupo' || v === 'vLibro') && !app.grupo) v = 'vHome';
+  show(v, false);
+});
 
 window.__app = { app, sb, parseSong, render };

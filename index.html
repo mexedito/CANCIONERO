@@ -182,6 +182,8 @@ label.chk input{width:22px;height:22px}
 #tuNote{text-align:center;font-family:var(--serif);font-size:54px;font-weight:700;line-height:1}
 #tuInfo{text-align:center;color:var(--mut);font-size:14px}
 #tuNote.ok{color:var(--ok)}
+.modal .box{max-height:88vh;max-height:88dvh}
+#picker .box{height:88vh;height:88dvh;max-height:none}
 #edAdj{display:flex;gap:8px;flex-wrap:wrap}
 #edAdj .th{position:relative;width:84px;height:110px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#fff}
 #edAdj .th img{width:100%;height:100%;object-fit:cover}
@@ -324,10 +326,11 @@ label.chk input{width:22px;height:22px}
 
 <!-- ============ MODALES ============ -->
 <div id="picker" class="modal hidden"><div class="box">
+  <div class="hdr"><h3 id="pTitle" style="flex:1">Canciones</h3><button id="pX" title="Cerrar">✕</button></div>
   <input id="psearch" placeholder="Buscar canción…">
   <div id="pgroups"></div>
-  <div id="plist" class="list" style="overflow:auto"></div>
-  <button id="pclose">Cerrar</button>
+  <div id="plist" class="list" style="overflow:auto;flex:1;min-height:0"></div>
+  <div class="row2"><button id="pcancel">Cancelar</button><button id="pclose" class="pri">Agregar</button></div>
 </div></div>
 
 <div id="editor" class="modal hidden"><div class="box">
@@ -393,6 +396,6 @@ label.chk input{width:22px;height:22px}
 </div></div>
 
 <div id="toast"></div>
-<script type="module" src="app.js?v=1793839616"></script>
+<script type="module" src="app.js?v=1793913434"></script>
 </body>
 </html>
