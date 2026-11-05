@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793914245';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793917939';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -624,18 +624,24 @@ $('btnLNew').onclick = async () => {
 $('lList').addEventListener('click', e => { const l = e.target.closest('[data-l]')?.dataset.l; if (l) openLibro(l) });
 async function openLibro(id) {
   const l = app.libros.find(x => x.id === id); if (!l) return;
-  app.libro = l; $('lName').textContent = l.nombre; show('vLibro'); await loadItems();
+  app.libro = l; $('lName').textContent = l.nombre; $('liSearch').value = ''; show('vLibro'); await loadItems();
 }
 async function loadItems() {
   const { data, error } = await sb.from('cancionero_items').select('id,orden,tono,canciones(id,titulo,texto,categorias,adjuntos)').eq('cancionero_id', app.libro.id).order('orden');
   if (error) { toast(errMsg(error)); return }
   app.items = (data || []).filter(i => i.canciones);
-  $('liList').innerHTML = app.items.map((it, k) => {
+  drawItems();
+}
+function drawItems() {
+  const q = norm($('liSearch').value);
+  const list = app.items.map((it, k) => ({ it, k })).filter(({ it }) => !q || norm(it.canciones.titulo + ' ' + it.canciones.texto).includes(q));
+  $('liList').innerHTML = list.map(({ it, k }) => {
     const s = it.canciones, fc = firstChord(parsedOf(s)); const key = fc ? trChord(fc, it.tono, null) : '';
     return `<div class="item" style="--gc:${gColor((s.categorias || [])[0] || '')}"><div class="main" data-i="${it.id}"><div class="t">${k + 1}. ${esc(s.titulo.replace(/^\s*\d+\s*\.\s*/, ''))}</div><div class="s">${key ? 'Tono ' + esc(key) : ''}${it.tono ? ` (${it.tono > 0 ? '+' : ''}${it.tono})` : ''}</div></div>
     ${isAdmin() ? `<div class="grp"><button data-t="-1" data-it="${it.id}">−½</button><button data-t="1" data-it="${it.id}">+½</button></div><div style="display:flex;flex-direction:column;gap:2px"><button data-up="${it.id}" style="min-height:28px;padding:0 8px">▲</button><button data-dn="${it.id}" style="min-height:28px;padding:0 8px">▼</button></div><button data-rm="${it.id}">✕</button>` : ''}</div>`;
-  }).join('') || `<p class="muted">Este cancionero está vacío. ${isAdmin() ? 'Tocá ＋ Agregar canciones.' : ''}</p>`;
+  }).join('') || (app.items.length ? '<p class="muted">No hay resultados</p>' : `<p class="muted">Este cancionero está vacío. ${isAdmin() ? 'Tocá ＋ Agregar canciones.' : ''}</p>`);
 }
+$('liSearch').addEventListener('input', drawItems);
 $('btnLBack').onclick = () => { show('vGrupo'); loadLibros() };
 $('liList').addEventListener('click', async e => {
   const b = e.target.closest('button,[data-i]'); if (!b) return;
