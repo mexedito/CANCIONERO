@@ -267,6 +267,7 @@ label.chk input{width:22px;height:22px}
 
     <div data-pane="canc">
       <div class="row2" style="margin-bottom:8px"><input id="cSearch" placeholder="Buscar canción…"><button id="btnCNew" class="pri adminOnly" style="flex:none">＋ Nueva</button></div>
+      <button class="link adminOnly" id="btnImport" style="margin:-2px 0 8px">📥 Importar un cancionero completo (Word)</button>
       <div id="cGroups" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px"></div>
       <div id="cList" class="list"></div>
       <button class="link" id="btnPublicas" style="margin-top:8px">🌎 Ver canciones compartidas por otros grupos</button>
@@ -390,12 +391,29 @@ label.chk input{width:22px;height:22px}
   <button id="qAdd" class="pri">＋ Agregar canciones a la cola</button>
 </div></div>
 
+<div id="imp" class="modal hidden"><div class="box">
+  <div class="hdr"><h3 style="flex:1">📥 Importar cancionero</h3><button id="impX">✕</button></div>
+  <p class="muted">Subí el Word con todas las canciones. Cada canción tiene que empezar con su número y el título, por ejemplo <b>12. Ven Espíritu</b>, y abajo la letra con los acordes en el renglón de arriba.</p>
+  <button class="big" id="impPick">📄 Elegir archivo Word (.docx)</button>
+  <input type="file" id="impFile" accept=".docx,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" class="hidden">
+  <details><summary class="muted" style="cursor:pointer">…o pegar el texto</summary><textarea id="impTxt" spellcheck="false" style="min-height:160px;width:100%;margin-top:8px;font:14px ui-monospace,monospace;color:var(--tx);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px"></textarea><button id="impRead" style="margin-top:6px">Leer texto</button></details>
+  <div id="impRes" class="hidden" style="display:flex;flex-direction:column;gap:10px">
+    <div id="impSum" style="font-weight:700"></div>
+    <div id="impList" class="list" style="max-height:30vh;overflow:auto"></div>
+    <label class="chk"><input type="radio" name="impMode" value="add" checked> Agregar a las que ya tengo (si una canción ya existe con el mismo nombre, se actualiza)</label>
+    <label class="chk"><input type="radio" name="impMode" value="replace"> Reemplazar todas las canciones del grupo</label>
+    <label class="chk"><input type="checkbox" id="impRenum" checked> Numerar de corrido (1, 2, 3…)</label>
+    <button class="big pri" id="impGo">Importar</button>
+  </div>
+  <div id="impMsg" class="muted"></div>
+</div></div>
+
 <div id="dialog" class="modal hidden"><div class="box">
   <h3 id="dlgT"></h3><div id="dlgB"></div>
   <div style="display:flex;gap:8px;justify-content:flex-end"><button id="dlgNo">Cancelar</button><button id="dlgOk" class="pri">Aceptar</button></div>
 </div></div>
 
 <div id="toast"></div>
-<script type="module" src="app.js?v=1793913434"></script>
+<script type="module" src="app.js?v=1793913632"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793913434';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793913632';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -450,6 +450,99 @@ $('edOcrFile').onchange = async () => {
   } catch (e) { console.log(e); $('edOcrMsg').textContent = 'No se pudo leer la foto: ' + errMsg(e) }
   finally { $('edOcr').disabled = false; ocrProgress = null }
 };
+/* ----- Importar cancionero completo ----- */
+let impSongs = [];
+const IMP_TIT = /^\s*(\d{1,3})\s*(?:(\(bis\))\s*|(?:[.\-–]|\s(?=[A-ZÁÉÍÓÚÑ]{2}))\s*)(.+)$/;
+const IMP_CAPS = { dios: 'Dios', jesus: 'Jesús', 'jesús': 'Jesús', 'señor': 'Señor', espiritu: 'Espíritu', 'espíritu': 'Espíritu', maria: 'María', 'maría': 'María', cristo: 'Cristo', santo: 'Santo', rey: 'Rey' };
+function niceTitle(t) { if (t !== t.toUpperCase()) return t; const w = t.toLowerCase().split(/\s+/).map(x => IMP_CAPS[x] || x).join(' '); return w.charAt(0).toUpperCase() + w.slice(1) }
+const stripNum = t => String(t).replace(/^\s*\d+(\s*bis)?\s*[.\-–]?\s*/i, '').trim();
+function guessCats(title) {
+  const t = norm(title), c = [];
+  if (/espiritu|ruah|fluye|fluira|sopla|tocame/.test(t)) c.push('Espíritu Santo');
+  if (/eucaristia|hostia|pan de vida|comunion/.test(t)) c.push('Comunión');
+  if (/kyrie|perdon|piedad/.test(t)) c.push('Perdón');
+  if (/\bmaria\b|\bmadre\b|\bave\b/.test(t)) c.push('María');
+  return c.length ? c : ['Alabanza y adoración'];
+}
+function splitSongs(lines) {
+  const songs = []; let cur = null;
+  for (let l of lines) {
+    l = l.replace(/ /g, ' ').replace(/\t/g, '    ').replace(/\s+$/, '');
+    const m = l.match(IMP_TIT);
+    if (m && !isChordLine(l)) {
+      const parts = m[3].trim().split(/\s{3,}/); const title = parts[0].trim();
+      cur = { num: m[1] + (m[2] ? ' bis' : ''), base: niceTitle(title), lines: parts[1] && isChordLine(parts[1]) ? ['Intro: ' + parts[1].trim()] : [] };
+      songs.push(cur); continue;
+    }
+    if (cur) cur.lines.push(l);
+  }
+  const seen = new Set(), out = [];
+  for (const s of songs) {
+    while (s.lines.length && !s.lines[0].trim()) s.lines.shift();
+    while (s.lines.length && !s.lines[s.lines.length - 1].trim()) s.lines.pop();
+    const texto = s.lines.join('\n').replace(/\n\s*\n(\s*\n)+/g, '\n\n');
+    if (!texto.trim() || seen.has(texto)) continue; seen.add(texto);
+    out.push({ num: s.num, base: s.base, texto, categorias: guessCats(s.base) });
+  }
+  return out;
+}
+async function docxLines(file) {
+  const base = new URL('./lib/', import.meta.url).href;
+  if (!window.JSZip) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = base + 'jszip.min.js'; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc) });
+  const zip = await JSZip.loadAsync(file); const xml = await zip.file('word/document.xml').async('string');
+  const doc = new DOMParser().parseFromString(xml, 'application/xml'); const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const lines = [];
+  for (const p of doc.getElementsByTagNameNS(W, 'p')) {
+    let t = '';
+    for (const n of p.getElementsByTagNameNS(W, '*')) {
+      if (n.localName === 't') t += n.textContent; else if (n.localName === 'tab') t += '    '; else if (n.localName === 'br' || n.localName === 'cr') t += '\n';
+    }
+    lines.push(...t.split('\n'));
+  }
+  return lines;
+}
+function showImp(songs) {
+  impSongs = songs;
+  $('impRes').classList.toggle('hidden', !songs.length);
+  $('impMsg').textContent = songs.length ? '' : 'No encontré canciones. Revisá que cada una empiece con número y título, por ejemplo "12. Ven Espíritu".';
+  $('impSum').textContent = `Encontré ${songs.length} canciones`;
+  $('impList').innerHTML = songs.map(x => `<div class="item" style="padding:6px 10px"><div class="main"><div class="t" style="font-size:16px">${esc(x.num)}. ${esc(x.base)}</div><div class="s">${x.texto.split('\n').length} renglones · ${x.categorias.map(chip).join('')}</div></div></div>`).join('');
+}
+$('btnImport').onclick = () => { $('imp').classList.remove('hidden'); $('impMsg').textContent = ''; $('impRes').classList.add('hidden'); $('impTxt').value = '' };
+$('impX').onclick = () => $('imp').classList.add('hidden');
+$('impPick').onclick = () => $('impFile').click();
+$('impFile').onchange = async () => {
+  const f = $('impFile').files[0]; $('impFile').value = ''; if (!f) return;
+  $('impMsg').textContent = 'Leyendo ' + f.name + '…';
+  try { const lines = /\.txt$/i.test(f.name) ? (await f.text()).split(/\r?\n/) : await docxLines(f); showImp(splitSongs(lines)) }
+  catch (e) { console.log(e); $('impMsg').textContent = 'No pude leer el archivo. Tiene que ser un Word .docx (no .doc viejo ni PDF).' }
+};
+$('impRead').onclick = () => showImp(splitSongs($('impTxt').value.split(/\r?\n/)));
+$('impGo').onclick = async () => {
+  if (!impSongs.length) return;
+  const replace = document.querySelector('input[name=impMode]:checked').value === 'replace', renum = $('impRenum').checked;
+  if (replace && !await ask('¿Reemplazar todas las canciones?', `<p class="muted">Se borran las ${app.canciones.length} canciones actuales del grupo, y las grabaciones y cancioneros que las usen pierden esa canción. Después se cargan las ${impSongs.length} nuevas.</p>`, 'Reemplazar todo')) return;
+  $('impGo').disabled = true; $('impMsg').textContent = 'Importando…';
+  try {
+    const { data: cur } = await sb.from('canciones').select('id,titulo').eq('grupo_id', app.grupo.id);
+    let start = 0;
+    if (replace) { const { error } = await sb.from('canciones').delete().eq('grupo_id', app.grupo.id); if (error) throw error }
+    else start = (cur || []).reduce((m, x) => Math.max(m, numOf(x.titulo) < 1e9 ? numOf(x.titulo) : 0), 0);
+    const byName = new Map(replace ? [] : (cur || []).map(x => [norm(stripNum(x.titulo)), x]));
+    const ins = [], upd = []; let n = start;
+    impSongs.forEach((x, i) => {
+      const ex = byName.get(norm(x.base));
+      if (ex) { upd.push({ id: ex.id, texto: x.texto, titulo: renum ? ex.titulo : `${x.num}. ${x.base}` }); return }
+      const num = renum ? (replace ? i + 1 : ++n) : x.num;
+      ins.push({ grupo_id: app.grupo.id, titulo: `${num}. ${x.base}`, texto: x.texto, categorias: x.categorias });
+    });
+    for (let i = 0; i < ins.length; i += 40) { $('impMsg').textContent = `Cargando ${Math.min(i + 40, ins.length)} de ${ins.length}…`; const { error } = await sb.from('canciones').insert(ins.slice(i, i + 40)); if (error) throw error }
+    for (const [k, u] of upd.entries()) { $('impMsg').textContent = `Actualizando ${k + 1} de ${upd.length}…`; const { error } = await sb.from('canciones').update({ texto: u.texto, titulo: u.titulo }).eq('id', u.id); if (error) throw error }
+    $('imp').classList.add('hidden'); toast(`Listo: ${ins.length} nuevas${upd.length ? ', ' + upd.length + ' actualizadas' : ''} ✓`); loadCanciones();
+  } catch (e) { console.log(e); $('impMsg').textContent = 'Error al importar: ' + errMsg(e) }
+  finally { $('impGo').disabled = false }
+};
+
 /* ----- Cancioneros ----- */
 async function loadLibros() {
   const { data, error } = await sb.from('cancioneros').select('id,nombre,cancionero_items(count)').eq('grupo_id', app.grupo.id).order('created_at', { ascending: false });
