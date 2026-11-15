@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1793918554';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1794770947';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -106,6 +106,16 @@ function snap(chords,text){
 function firstChord(secs){for(const s of secs)for(const l of s.lines)if(l.chords)for(const c of l.chords)for(const p of c.c.split(SPLIT_RE))if(isChord(p))return p;return null}
 function usesFlats(secs){for(const s of secs)for(const l of s.lines)if(l.chords)for(const c of l.chords)for(const p of c.c.split(SPLIT_RE)){const x=parseChord(p);if(x&&x.acc==='b')return true}return false}
 
+
+function transposeText(txt,n){
+  if(!n)return txt; const flat=usesFlats(parseSong(txt));
+  const trLine=l=>{let out='';for(const {pos,c} of chordsOf(l)){const t=tokenKind(c)===2?trToken(c,n,flat):c;let at=Math.max(pos,out.length?out.length+1:0);out=out.padEnd(at,' ')+t}return out};
+  return txt.split('\n').map(l=>{
+    if(isChordLine(l))return trLine(l);
+    const m=l.match(LABEL_CH_RE); if(m&&isChordLine(m[2]))return l.slice(0,l.length-m[2].length)+trLine(m[2]).trim();
+    return l.replace(/\[([^\]]+)\]/g,(a,c)=>tokenKind(c)===2?'['+trToken(c,n,flat)+']':a);
+  }).join('\n');
+}
 
 
 /* ===================== UTILIDADES ===================== */
@@ -299,8 +309,12 @@ function openEditor(id) {
   edCats = s ? [...(s.categorias || [])] : (app.cat ? [app.cat] : []);
   edAdj = s ? [...(s.adjuntos || [])] : []; edNew = []; edRemoved = []; $('edOcrMsg').textContent = ''; drawAdj();
   $('edDel').classList.toggle('hidden', !s); $('edDel').textContent = 'Borrar'; $('edMsg').textContent = '';
-  drawChips(); $('editor').classList.remove('hidden');
+  edShift = 0; drawKey(); drawChips(); $('editor').classList.remove('hidden');
 }
+let edShift = 0;
+function drawKey() { const fc = firstChord(parseSong($('edTxt').value)); $('edKey').textContent = fc || '—'; $('edKeyD').textContent = edShift ? `(${edShift > 0 ? '+' : ''}${edShift} sin guardar)` : '' }
+const edTr = n => { const t = $('edTxt').value; if (!firstChord(parseSong(t))) { toast('La canción no tiene acordes'); return } $('edTxt').value = transposeText(t, n); edShift = ((edShift + n + 17) % 12) - 5; drawKey() };
+$('edTm').onclick = () => edTr(-1); $('edTp').onclick = () => edTr(1); $('edTxt').addEventListener('input', () => { if (!edShift) drawKey() });
 function drawChips() { const all = sortGroups([...catsOf(app.canciones), ...edCats]); $('edChips').innerHTML = all.map(g => `<button data-g="${esc(g)}" class="${edCats.includes(g) ? 'on' : ''}" style="border-radius:20px;padding:6px 12px;min-height:34px;font-size:14px">${esc(g)}</button>`).join('') }
 $('edChips').addEventListener('click', e => { const g = e.target.closest('button')?.dataset.g; if (g == null) return; edCats = edCats.includes(g) ? edCats.filter(x => x !== g) : [...edCats, g]; drawChips() });
 $('edAddG').onclick = () => { const g = $('edNewG').value.trim(); if (!g) return; if (!edCats.includes(g)) edCats.push(g); $('edNewG').value = ''; drawChips() };
