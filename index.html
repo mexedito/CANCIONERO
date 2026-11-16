@@ -143,6 +143,13 @@ body.nobar #btnBar{opacity:.55}
   #song{font-size:calc(var(--fs) * 1.1)}
 }
 
+.sec.vc{border-left:6px solid var(--vc);background:color-mix(in srgb,var(--vc) 13%,transparent);padding-top:14px}
+.sec.vc.cur{border-color:var(--acc);border-left:6px solid var(--vc);background:color-mix(in srgb,var(--vc) 22%,transparent)}
+.sec.vc.rep{border-color:var(--rep);border-left:6px solid var(--vc)}
+.sec .vtag{position:absolute;top:-11px;left:10px;background:var(--vc);color:#111;font-size:13px;font-weight:800;padding:2px 10px;border-radius:20px}
+.vleg{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 14px;font-size:14px}
+.vleg span{display:flex;align-items:center;gap:6px}.vleg i{width:12px;height:12px;border-radius:50%;background:var(--vc)}
+
 body:not(.esAdmin) .adminOnly{display:none!important}
 
 /* ====== Vistas nuevas ====== */
@@ -393,6 +400,13 @@ label.chk input{width:22px;height:22px}
   <button id="qAdd" class="pri">＋ Agregar canciones a la cola</button>
 </div></div>
 
+<div id="voz" class="modal hidden"><div class="box">
+  <div class="hdr"><h3 style="flex:1">🎨 ¿Quién canta? · <span id="vzSec"></span></h3><button id="vzX">✕</button></div>
+  <div class="muted">Elegí un color. Podés cambiarle el nombre (ej: Juan, Coro, Mujeres). Queda guardado en la canción y lo ven todos.</div>
+  <div id="vzList" style="display:flex;flex-direction:column;gap:8px"></div>
+  <button id="vzNone">Quitar color</button>
+</div></div>
+
 <div id="imp" class="modal hidden"><div class="box">
   <div class="hdr"><h3 style="flex:1">📥 Importar cancionero</h3><button id="impX">✕</button></div>
   <p class="muted">Subí el Word o PDF con todas las canciones. Cada canción tiene que empezar con su número y el título, por ejemplo <b>12. Ven Espíritu</b>, y abajo la letra con los acordes en el renglón de arriba.</p>
@@ -421,6 +435,6 @@ label.chk input{width:22px;height:22px}
 </div></div>
 
 <div id="toast"></div>
-<script type="module" src="app.js?v=1794770947"></script>
+<script type="module" src="app.js?v=1794840667"></script>
 </body>
 </html>

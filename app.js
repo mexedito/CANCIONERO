@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1794770947';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1794840667';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -267,7 +267,7 @@ document.querySelector('#vGrupo .tabs').addEventListener('click', e => { const t
 
 /* ----- Canciones ----- */
 async function loadCanciones() {
-  const q = sb.from('canciones').select('id,grupo_id,titulo,texto,categorias,publica,adjuntos');
+  const q = sb.from('canciones').select('id,grupo_id,titulo,texto,categorias,publica,adjuntos,colores');
   const { data, error } = app.publicas ? await q.eq('publica', true).neq('grupo_id', app.grupo.id).limit(500) : await q.eq('grupo_id', app.grupo.id);
   if (error) { toast(errMsg(error)); return }
   app.canciones = (data || []).sort(bySong); drawCanciones();
@@ -657,7 +657,7 @@ async function openLibro(id) {
   app.libro = l; $('lName').textContent = l.nombre; $('liSearch').value = ''; show('vLibro'); await loadItems();
 }
 async function loadItems() {
-  const { data, error } = await sb.from('cancionero_items').select('id,orden,tono,canciones(id,titulo,texto,categorias,adjuntos)').eq('cancionero_id', app.libro.id).order('orden');
+  const { data, error } = await sb.from('cancionero_items').select('id,orden,tono,canciones(id,grupo_id,titulo,texto,categorias,adjuntos,colores)').eq('cancionero_id', app.libro.id).order('orden');
   if (error) { toast(errMsg(error)); return }
   app.items = (data || []).filter(i => i.canciones);
   drawItems();
@@ -733,7 +733,7 @@ const cacheSongs = list => list.forEach(x => { if (x && x.id) songCache[x.id] = 
 const toQ = (song, tono) => ({ k: Math.random().toString(36).slice(2, 9), id: song.id, titulo: song.titulo, tono: tono || 0 });
 async function songById(id) {
   if (songCache[id]) return songCache[id];
-  const { data } = await sb.from('canciones').select('id,titulo,texto,categorias,adjuntos').eq('id', id).maybeSingle();
+  const { data } = await sb.from('canciones').select('id,grupo_id,titulo,texto,categorias,adjuntos,colores').eq('id', id).maybeSingle();
   if (data) songCache[id] = data; return data;
 }
 async function playQ(i) {
@@ -764,10 +764,14 @@ function render() {
   $('songTitle').textContent = sg.titulo;
   $('songGroups').innerHTML = (sg.categorias || []).map(chip).join('');
   $('mKey').textContent = fc ? trChord(fc, n, flat) : '—';
-  let h = '<div class="secs">';
+  let h = '';
+  { const seen = new Map(); Object.values(sg.col || {}).forEach(v => { if (v && VOZ[v.c]) seen.set(v.c + '|' + (v.n || ''), v) }); if (seen.size) h += '<div class="vleg">' + [...seen.values()].map(v => `<span style="--vc:${VOZ[v.c]}"><i></i>${esc(v.n || 'Sin nombre')}</span>`).join('') + '</div>' }
+  h += '<div class="secs">';
   secs.forEach((s, i) => {
     const cls = ['sec']; if (i === S.sec) cls.push('cur'); if (i === S.sec && S.rep) cls.push('rep');
-    h += `<div class="${cls.join(' ')}" data-i="${i}">`;
+    const vc = (sg.col || {})[i]; if (vc && VOZ[vc.c]) cls.push('vc');
+    h += `<div class="${cls.join(' ')}" data-i="${i}"${vc && VOZ[vc.c] ? ` style="--vc:${VOZ[vc.c]}"` : ''}>`;
+    if (vc && VOZ[vc.c] && vc.n) h += `<div class="vtag">${esc(vc.n)}</div>`;
     if (i === S.sec && S.rep) h += '<div class="badge">↻ REPETIR</div>';
     if (s.label) h += `<div class="lbl">${esc(s.label)}</div>`;
     for (const l of s.lines) {
@@ -803,6 +807,7 @@ function renderBar() {
     <div class="row">
       <div class="grp"><button data-a="t-">−½</button><span>Tono<b>${S.t > 0 ? '+' : ''}${S.t}</b></span><button data-a="t+">+½</button></div>
       <div class="grp"><button data-a="s-">🐢</button><span>Avance<b>${S.speed}</b></span><button data-a="s+">🐇</button></div>
+      ${canColor() ? '<button data-a="voz" title="Color de la estrofa">🎨 Voces</button>' : ''}
     </div>
     <div class="row">
       ${mode === 'dir' ? '<button data-a="pick">🎵 Lista</button>' : ''}${nav}
@@ -823,6 +828,28 @@ function renderBar() {
     </div>`;
   }
 }
+const VOZ = { rosa: '#ff7eb6', celeste: '#5ec8ff', verde: '#6fdc8c', violeta: '#b58cff', naranja: '#ffa94d' };
+const VOZ_DEF = { rosa: 'Mujeres', celeste: 'Hombres', verde: 'Solista', violeta: 'Voz 2', naranja: 'Todos' };
+const canColor = () => !!(S.song && S.song.id && app.grupo && S.song.gid === app.grupo.id && isAdmin());
+function vozName(c) { for (const x of [S.song, ...(app.canciones || [])]) { const col = x && (x.col || x.colores); if (col) for (const v of Object.values(col)) if (v && v.c === c && v.n) return v.n } return VOZ_DEF[c] }
+function openVoz() {
+  if (S.sec < 0) { toast('Primero tocá una estrofa'); return }
+  const cur = (S.song.col || {})[S.sec];
+  $('vzSec').textContent = 'Estrofa ' + (S.sec + 1);
+  $('vzList').innerHTML = Object.keys(VOZ).map(c => `<div class="row2" style="align-items:center"><button data-vc="${c}" style="flex:none;width:44px;background:${VOZ[c]};border-color:${cur && cur.c === c ? '#fff' : VOZ[c]}"></button><input data-vn="${c}" value="${esc(cur && cur.c === c && cur.n ? cur.n : vozName(c))}"><button data-vok="${c}" style="flex:none">Usar</button></div>`).join('');
+  $('voz').classList.remove('hidden');
+}
+async function setVoz(c) {
+  const col = { ...(S.song.col || {}) };
+  if (c) col[S.sec] = { c, n: ($(`vzList`).querySelector(`[data-vn="${c}"]`).value || '').trim() }; else delete col[S.sec];
+  const { error } = await sb.from('canciones').update({ colores: col }).eq('id', S.song.id);
+  if (error) { toast(errMsg(error)); return }
+  S.song.col = col; const a = (app.canciones || []).find(x => x.id === S.song.id); if (a) a.colores = col; if (songCache[S.song.id]) songCache[S.song.id].colores = col;
+  (app.items || []).forEach(it => { if (it.canciones && it.canciones.id === S.song.id) it.canciones.colores = col });
+  $('voz').classList.add('hidden'); publish();
+}
+$('vzList').addEventListener('click', e => { const b = e.target.closest('[data-vc],[data-vok]'); if (b) setVoz(b.dataset.vc || b.dataset.vok) });
+$('vzNone').onclick = () => setVoz(null); $('vzX').onclick = () => $('voz').classList.add('hidden');
 function nextQ() { return (S.cola || [])[(S.qi ?? -1) + 1] || null }
 function drawCola() {
   const ed = mode === 'dir' || mode === 'solo';
@@ -874,7 +901,7 @@ function scrollToSec(i) {
   el.animate([{ boxShadow: '0 0 0 0 rgba(240,194,100,.9)' }, { boxShadow: '0 0 0 14px rgba(240,194,100,0)' }], { duration: 900 });
 }
 function goSec(i) { const secs = S.song && parsedOf(S.song); if (!secs) return; S.sec = Math.max(0, Math.min(secs.length - 1, i)); S.rep = false; S.jump = Date.now(); publish(); scrollToSec(S.sec) }
-function setSong(song, tono, idx) { if (song && song.id) songCache[song.id] = song; S.qi = idx ?? -1; S.song = song ? { id: song.id, titulo: song.titulo, texto: song.texto, categorias: song.categorias || [], adj: (song.adjuntos || []).map(a => a.path) } : null; if (S.song && S.song.adj.length) { const sid = song.id; signedUrls(S.song.adj, 6 * 3600).then(u => { if (S.song && S.song.id === sid) { S.song.adjUrls = u; publish() } }) } recSong = song && song.id ? song : null; S.t = tono || 0; S.sec = -1; S.rep = false; S.playing = false; S.speed = 10; window.scrollTo({ top: 0 }); scrollAcc = 0; publish() }
+function setSong(song, tono, idx) { if (song && song.id) songCache[song.id] = song; S.qi = idx ?? -1; S.song = song ? { id: song.id, titulo: song.titulo, texto: song.texto, categorias: song.categorias || [], col: song.colores || {}, gid: song.grupo_id, adj: (song.adjuntos || []).map(a => a.path) } : null; if (S.song && S.song.adj.length) { const sid = song.id; signedUrls(S.song.adj, 6 * 3600).then(u => { if (S.song && S.song.id === sid) { S.song.adjUrls = u; publish() } }) } recSong = song && song.id ? song : null; S.t = tono || 0; S.sec = -1; S.rep = false; S.playing = false; S.speed = 10; window.scrollTo({ top: 0 }); scrollAcc = 0; publish() }
 
 $('bar').addEventListener('click', e => {
   const a = e.target.closest('button')?.dataset.a; if (!a) return;
@@ -883,6 +910,7 @@ $('bar').addEventListener('click', e => {
     if (a === 's-') { S.speed = Math.max(5, S.speed - 5); publish() }
     if (a === 's+') { S.speed = Math.min(150, S.speed + 5); publish() }
     if (a === 'pick') openPicker('sala');
+    if (a === 'voz') openVoz();
     if (a === 'prev') goSec(S.sec - 1);
     if (a === 'next') goSec(S.sec + 1);
     if (a === 'sprev' || a === 'snext') { const j = (S.qi ?? -1) + (a === 'snext' ? 1 : -1); if (j >= 0 && j < S.cola.length) playQ(j); else toast(a === 'snext' ? 'No hay más en la cola' : 'Es la primera') }
@@ -965,7 +993,7 @@ let pMode = 'sala', pCat = '', pSel = new Set();
 async function openPicker(m) {
   pMode = m; pCat = ''; pSel = new Set(); $('psearch').value = '';
   if (m === 'sala' && salaGrupo && (!app.grupo || app.grupo.id !== salaGrupo || !app.canciones.length)) {
-    const { data } = await sb.from('canciones').select('id,titulo,texto,categorias,adjuntos').eq('grupo_id', salaGrupo); app.canciones = (data || []).sort(bySong);
+    const { data } = await sb.from('canciones').select('id,grupo_id,titulo,texto,categorias,adjuntos,colores').eq('grupo_id', salaGrupo); app.canciones = (data || []).sort(bySong);
   }
   $('pTitle').textContent = m === 'add' ? 'Agregar al cancionero' : 'Canciones';
   $('pclose').classList.toggle('hidden', m !== 'add'); $('pcancel').textContent = m === 'add' ? 'Cancelar' : 'Cerrar';
