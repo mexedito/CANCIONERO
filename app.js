@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1794840667';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1795095102';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -57,8 +57,9 @@ const LABEL_RE=/^\s*(estribillo|coro|pre[\s-]?coro|estrofa|verso|puente|intro|in
 const LABEL_CH_RE=/^\s*(intro|introducci[oó]n|instrumental|interludio|final|salida|solo)\s*[:\-]\s*(.+)$/i;
 const isLabel=l=>{const t=l.trim();return t.length<34&&LABEL_RE.test(t)&&!isChordLine(t)&&!/\[/.test(t)};
 
+const cleanTxt=t=>(t||'').replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g,'').replace(/[\u00A0\u2007\u202F]/g,' ').replace(/\r/g,'');
 function parseSong(txt){
-  const blocks=txt.replace(/\r/g,'').split(/\n\s*\n/).map(b=>b.split('\n').filter(l=>l.trim()!=='')).filter(b=>b.length);
+  const blocks=cleanTxt(txt).split(/\n\s*\n/).map(b=>b.split('\n').filter(l=>l.trim()!=='')).filter(b=>b.length);
   const secs=[];
   for(const lines of blocks){
     let cur={label:'',lines:[]}; const push=()=>{if(cur.lines.length||cur.label)secs.push(cur)};
@@ -321,7 +322,7 @@ $('edAddG').onclick = () => { const g = $('edNewG').value.trim(); if (!g) return
 const closeEd = (saved) => { if (saved !== true && edNew.length) sb.storage.from('adjuntos').remove(edNew); edNew = []; $('editor').classList.add('hidden') };
 $('edX').onclick = () => closeEd(); $('edCancel').onclick = () => closeEd();
 $('edSave').onclick = async () => {
-  const row = { titulo: $('edTit').value.trim(), texto: $('edTxt').value.replace(/\s+$/, ''), categorias: edCats, publica: $('edPub').checked, adjuntos: edAdj };
+  const row = { titulo: $('edTit').value.trim(), texto: cleanTxt($('edTxt').value).replace(/\s+$/, ''), categorias: edCats, publica: $('edPub').checked, adjuntos: edAdj };
   if (!row.titulo) { $('edMsg').textContent = 'Falta el título'; return }
   if (!row.texto.trim() && !edAdj.length) { $('edMsg').textContent = 'Falta la letra (o adjuntá una foto o PDF)'; return }
   $('edSave').disabled = true; $('edMsg').textContent = '';
@@ -485,7 +486,7 @@ function guessCats(title) {
 }
 function splitSongs(lines) {
   const songs = []; let cur = null;
-  for (let l of lines) {
+  for (let l of lines) { l = cleanTxt(l);
     l = l.replace(/ /g, ' ').replace(/\t/g, '    ').replace(/\s+$/, '');
     const m = l.match(IMP_TIT);
     if (m && !isChordLine(l)) {
