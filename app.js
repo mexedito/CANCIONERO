@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1795095102';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=1795214734';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
 
@@ -246,7 +246,7 @@ $('codeIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnJoin
 async function openGrupo(id) {
   const g = app.grupos.find(x => x.id === id); if (!g) { show('vHome'); return }
   app.grupo = g; app.rol = g.rol; lsSet('cv_grupo', id);
-  $('gName').textContent = g.nombre; $('gRol').textContent = isAdmin() ? 'Director' : 'Músico'; $('gCode').textContent = g.codigo;
+  app.sel = null; $('gName').textContent = g.nombre; $('gRol').textContent = isAdmin() ? 'Director' : 'Músico'; $('gCode').textContent = g.codigo;
   document.body.classList.toggle('esAdmin', isAdmin());
   app.publicas = false; app.cat = '';
   show('vGrupo'); setTab(lsGet('cv_tab', 'canc'));
@@ -279,17 +279,57 @@ function drawCanciones() {
   $('cGroups').innerHTML = ['', ...cats].map(g => `<button data-c="${esc(g)}" class="${g === app.cat ? 'on' : ''}" style="flex:none;border-radius:20px;padding:6px 14px;min-height:36px;font-size:14px;${g ? `--gc:${gColor(g)};color:var(--gc)` : ''}">${g ? esc(g) : 'Todas'}</button>`).join('');
   const q = norm($('cSearch').value);
   const list = app.canciones.filter(s => (!app.cat || (s.categorias || []).includes(app.cat)) && norm(s.titulo + ' ' + s.texto).includes(q));
+  app.visibles = list; drawSelBar();
   $('btnPublicas').textContent = app.publicas ? '‹ Volver a las canciones del grupo' : '🌎 Ver canciones compartidas por otros grupos';
   $('cList').innerHTML = list.map(s => {
     const fc = firstChord(parsedOf(s)); const c0 = (s.categorias || [])[0] || '';
     const act = app.publicas ? (isAdmin() ? `<button data-copy="${s.id}">＋ Copiar</button>` : '') : (isAdmin() ? `<button data-edit="${s.id}">✎</button>` : '');
+    if (app.sel) { const on = app.sel.has(s.id); return `<div class="item${on ? ' sel' : ''}" style="--gc:${gColor(c0)}"><div class="ck">${on ? '✓' : ''}</div><div class="main" data-pick="${s.id}"><div class="t">${esc(s.titulo)}</div><div class="s">${(s.categorias || []).map(chip).join('')}${fc ? ' Tono ' + esc(fc) : ''}</div></div></div>` }
     return `<div class="item" style="--gc:${gColor(c0)}"><div class="main" data-open="${s.id}"><div class="t">${esc(s.titulo)}${(s.adjuntos || []).length ? ' 📎' : ''}</div><div class="s">${(s.categorias || []).map(chip).join('')}${fc ? ' Tono ' + esc(fc) : ''}${s.publica && !app.publicas ? ' · 🌎' : ''}</div></div>${act}</div>`;
   }).join('') || `<p class="muted">${app.canciones.length ? 'No hay resultados' : app.publicas ? 'Todavía no hay canciones compartidas.' : 'Todavía no hay canciones. ' + (isAdmin() ? 'Tocá ＋ Nueva para cargar la primera.' : '')}</p>`;
 }
 $('cSearch').addEventListener('input', drawCanciones);
+/* ----- Elegir varias y mandar a un cancionero ----- */
+function drawSelBar() {
+  $('btnCSel').textContent = app.sel ? '✓ Listo' : '☑ Elegir'; $('btnCSel').classList.toggle('on', !!app.sel);
+  $('selBar').classList.toggle('hidden', !app.sel); if (!app.sel) return;
+  const n = app.sel.size; $('selN').textContent = n ? `${n} elegida${n === 1 ? '' : 's'}` : 'Tocá las canciones';
+  const allOn = (app.visibles || []).length && app.visibles.every(x => app.sel.has(x.id)); $('selAll').textContent = allOn ? 'Ninguna' : 'Todas';
+  $('selGo').disabled = !n;
+}
+const selOff = () => { app.sel = null; drawCanciones() };
+$('btnCSel').onclick = () => { if (app.publicas) { toast('Volvé a las canciones del grupo'); return } app.sel ? selOff() : (app.sel = new Set(), drawCanciones()) };
+$('selX').onclick = selOff;
+$('selAll').onclick = () => { const v = app.visibles || []; const allOn = v.length && v.every(x => app.sel.has(x.id)); v.forEach(x => allOn ? app.sel.delete(x.id) : app.sel.add(x.id)); drawCanciones() };
+$('selGo').onclick = async () => {
+  if (!app.sel || !app.sel.size) return; await loadLibros();
+  $('tlInfo').textContent = `Vas a mandar ${app.sel.size} canción${app.sel.size === 1 ? '' : 'es'}. Las que ya estén en ese cancionero no se repiten.`;
+  $('tlList').innerHTML = (app.libros || []).map(l => `<div class="item"><div class="main" data-tl="${l.id}"><div class="t">📖 ${esc(l.nombre)}</div><div class="s">${l.cancionero_items?.[0]?.count || 0} canciones</div></div><button data-tl="${l.id}" class="pri">Mandar</button></div>`).join('') || '<p class="muted">Todavía no hay cancioneros. Creá uno abajo.</p>';
+  $('tlMsg').textContent = ''; $('tlNew').value = ''; $('toLib').classList.remove('hidden');
+};
+async function sendToLibro(libId, nombre) {
+  $('tlMsg').textContent = 'Mandando…';
+  const { data: cur, error: e1 } = await sb.from('cancionero_items').select('cancion_id,orden').eq('cancionero_id', libId);
+  if (e1) { $('tlMsg').textContent = errMsg(e1); return }
+  const have = new Set((cur || []).map(x => x.cancion_id)); let orden = Math.max(0, ...(cur || []).map(x => x.orden));
+  const ids = app.canciones.filter(s => app.sel.has(s.id)).map(s => s.id);
+  const rows = ids.filter(id => !have.has(id)).map(id => ({ cancionero_id: libId, cancion_id: id, orden: ++orden, tono: 0 }));
+  if (rows.length) { const { error } = await sb.from('cancionero_items').insert(rows); if (error) { $('tlMsg').textContent = errMsg(error); return } }
+  const rep = ids.length - rows.length;
+  $('toLib').classList.add('hidden'); selOff(); loadLibros();
+  toast(`${rows.length} agregada${rows.length === 1 ? '' : 's'} a "${nombre}"${rep ? ` · ${rep} ya estaba${rep === 1 ? '' : 'n'}` : ''} ✓`);
+}
+$('tlList').addEventListener('click', e => { const id = e.target.closest('[data-tl]')?.dataset.tl; if (!id) return; const l = app.libros.find(x => x.id === id); sendToLibro(id, l ? l.nombre : '') });
+$('tlNewGo').onclick = async () => {
+  const nombre = $('tlNew').value.trim(); if (!nombre) { $('tlMsg').textContent = 'Escribí un nombre'; return }
+  const { data, error } = await sb.from('cancioneros').insert({ grupo_id: app.grupo.id, nombre }).select('id').single();
+  if (error) { $('tlMsg').textContent = errMsg(error); return } sendToLibro(data.id, nombre);
+};
+$('tlX').onclick = () => $('toLib').classList.add('hidden');
 $('cGroups').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; app.cat = b.dataset.c; drawCanciones() });
 $('btnPublicas').onclick = () => { app.publicas = !app.publicas; app.cat = ''; loadCanciones() };
 $('cList').addEventListener('click', async e => {
+  if (app.sel) { const it = e.target.closest('.item'); const id = it && it.querySelector('[data-pick]')?.dataset.pick; if (!id) return; app.sel.has(id) ? app.sel.delete(id) : app.sel.add(id); drawCanciones(); return }
   const b = e.target.closest('[data-open],[data-edit],[data-copy]'); if (!b) return;
   if (b.dataset.edit) return openEditor(b.dataset.edit);
   if (b.dataset.copy) {
@@ -1223,4 +1263,4 @@ window.addEventListener('popstate', e => {
   show(v, false);
 });
 
-window.__app = { app, sb, parseSong, render, splitSongs, pdfLines: (f) => pdfLines(f, () => { }) };
+window.__app = { app, sb, parseSong, render, splitSongs, docxLines, pdfLines: (f) => pdfLines(f, () => { }) };

@@ -150,6 +150,13 @@ body.nobar #btnBar{opacity:.55}
 .vleg{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 14px;font-size:14px}
 .vleg span{display:flex;align-items:center;gap:6px}.vleg i{width:12px;height:12px;border-radius:50%;background:var(--vc)}
 
+#selBar{position:sticky;bottom:10px;z-index:20;display:flex;gap:8px;align-items:center;margin-top:10px;padding:10px 12px;border-radius:14px;background:var(--card,#1d1a2b);border:2px solid var(--acc);box-shadow:0 10px 30px rgba(0,0,0,.45)}
+#selBar.hidden{display:none}
+#selBar button{min-height:40px;padding:0 12px}
+.item.sel{border-color:var(--acc);background:rgba(240,194,100,.12)}
+.item .ck{flex:none;width:26px;height:26px;border-radius:8px;border:2px solid var(--acc);display:flex;align-items:center;justify-content:center;font-weight:900;color:#111;margin-left:4px}
+.item.sel .ck{background:var(--acc)}
+
 body:not(.esAdmin) .adminOnly{display:none!important}
 
 /* ====== Vistas nuevas ====== */
@@ -273,10 +280,11 @@ label.chk input{width:22px;height:22px}
     <div class="tabs"><button data-tab="canc" class="on">Canciones</button><button data-tab="libros">Cancioneros</button><button data-tab="grab">🎧</button><button data-tab="miem">Miembros</button></div>
 
     <div data-pane="canc">
-      <div class="row2" style="margin-bottom:8px"><input id="cSearch" placeholder="Buscar canción…"><button id="btnCNew" class="pri adminOnly" style="flex:none">＋ Nueva</button></div>
+      <div class="row2" style="margin-bottom:8px"><input id="cSearch" placeholder="Buscar canción…"><button id="btnCSel" class="adminOnly" style="flex:none" title="Elegir varias para mandar a un cancionero">☑ Elegir</button><button id="btnCNew" class="pri adminOnly" style="flex:none">＋ Nueva</button></div>
       <button class="link adminOnly" id="btnImport" style="margin:-2px 0 8px">📥 Importar un cancionero completo (Word o PDF)</button>
       <div id="cGroups" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px"></div>
       <div id="cList" class="list"></div>
+      <div id="selBar" class="hidden"><span id="selN" style="flex:1;font-weight:700"></span><button id="selAll">Todas</button><button id="selGo" class="pri">📖 Mandar a cancionero</button><button id="selX">✕</button></div>
       <button class="link" id="btnPublicas" style="margin-top:8px">🌎 Ver canciones compartidas por otros grupos</button>
     </div>
 
@@ -400,6 +408,14 @@ label.chk input{width:22px;height:22px}
   <button id="qAdd" class="pri">＋ Agregar canciones a la cola</button>
 </div></div>
 
+<div id="toLib" class="modal hidden"><div class="box">
+  <div class="hdr"><h3 style="flex:1">📖 ¿A qué cancionero?</h3><button id="tlX">✕</button></div>
+  <div id="tlInfo" class="muted"></div>
+  <div id="tlList" class="list"></div>
+  <div class="row2"><input id="tlNew" placeholder="O creá uno nuevo, ej: Misa del domingo"><button id="tlNewGo" class="pri" style="flex:none">Crear y mandar</button></div>
+  <div id="tlMsg" class="muted"></div>
+</div></div>
+
 <div id="voz" class="modal hidden"><div class="box">
   <div class="hdr"><h3 style="flex:1">🎨 ¿Quién canta? · <span id="vzSec"></span></h3><button id="vzX">✕</button></div>
   <div class="muted">Elegí un color. Podés cambiarle el nombre (ej: Juan, Coro, Mujeres). Queda guardado en la canción y lo ven todos.</div>
@@ -435,6 +451,6 @@ label.chk input{width:22px;height:22px}
 </div></div>
 
 <div id="toast"></div>
-<script type="module" src="app.js?v=1795095102"></script>
+<script type="module" src="app.js?v=1795214734"></script>
 </body>
 </html>
