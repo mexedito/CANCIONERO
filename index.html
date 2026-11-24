@@ -157,6 +157,10 @@ body.nobar #btnBar{opacity:.55}
 .item .ck{flex:none;width:26px;height:26px;border-radius:8px;border:2px solid var(--acc);display:flex;align-items:center;justify-content:center;font-weight:900;color:#111;margin-left:4px}
 .item.sel .ck{background:var(--acc)}
 
+.modeSel{display:flex;gap:6px;padding:5px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);margin-bottom:14px}
+.modeSel>*{flex:1;display:flex;align-items:center;justify-content:center;min-height:48px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;color:inherit;border:0;background:transparent}
+.modeSel .on{background:linear-gradient(135deg,var(--acc),var(--acc2,#f0a060));color:#1a1206}
+
 body:not(.esAdmin) .adminOnly{display:none!important}
 
 /* ====== Vistas nuevas ====== */
@@ -258,6 +262,7 @@ label.chk input{width:22px;height:22px}
 <section id="vHome" class="view">
   <div class="wrap">
     <div class="hdr"><h1>Hola, <span id="hName"></span></h1><button id="btnLogout" title="Salir">Salir</button></div>
+    <div class="modeSel"><button class="on" type="button">🎵 Música</button><a href="lectio.html" id="btnLectura">📖 Lectura</a></div>
     <div class="card">
       <h2>Entrar a una sala en vivo</h2>
       <input id="codeIn" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
@@ -451,6 +456,6 @@ label.chk input{width:22px;height:22px}
 </div></div>
 
 <div id="toast"></div>
-<script type="module" src="app.js?v=1795214734"></script>
+<script type="module" src="app.js?v=1795528694"></script>
 </body>
 </html>

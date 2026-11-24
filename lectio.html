@@ -1,0 +1,1892 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Lectio · Cancionero en vivo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: fixed top tab bar (Biblioteca / Cuaderno); Biblioteca = card grid,
+   Reader = centered single-column reading pane with a floating selection
+   toolbar, Cuaderno = stacked entry cards. One shared modal + toast system. */
+:root{
+  --bg:#EEECE1; --surface:#FFFFFF; --surface-2:#F6F4EA;
+  --ink:#20262F; --ink-soft:#5B6270; --line:#D9D4C3;
+  --accent:#9C6B2E; --accent-ink:#FFFFFF; --accent-soft:#EADFC4;
+  --danger:#A8432F;
+  --mark-default:#EADFC4; --mark-meditar:#F0CE7E; --mark-pregunta:#C9BCF2; --mark-clave:#AEDCCB;
+  --mark-ink:#2A2112;
+  --font-display:'Fraunces',Georgia,serif;
+  --font-read:'Source Serif 4',Georgia,serif;
+  --font-ui:'Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#15181D; --surface:#1C2027; --surface-2:#20242B;
+    --ink:#ECE7D8; --ink-soft:#9199A6; --line:#2B313B;
+    --accent:#D9A54B; --accent-ink:#1A1405; --accent-soft:#3A3122;
+    --danger:#E08870;
+    --mark-default:#3A3122; --mark-meditar:#4F421E; --mark-pregunta:#352F57; --mark-clave:#223C35;
+    --mark-ink:#F1E6C8;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15181D; --surface:#1C2027; --surface-2:#20242B;
+  --ink:#ECE7D8; --ink-soft:#9199A6; --line:#2B313B;
+  --accent:#D9A54B; --accent-ink:#1A1405; --accent-soft:#3A3122;
+  --danger:#E08870;
+  --mark-default:#3A3122; --mark-meditar:#4F421E; --mark-pregunta:#352F57; --mark-clave:#223C35;
+  --mark-ink:#F1E6C8;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+  padding-left:max(16px, env(safe-area-inset-left,0px));
+  padding-right:max(16px, env(safe-area-inset-right,0px));
+  padding-bottom:3rem;
+}
+h1,h2,h3{font-family:var(--font-display); font-weight:600; text-wrap:balance; margin:0;}
+button,input,select,textarea{font-family:var(--font-ui); font-size:0.95rem; color:var(--ink);}
+a{color:inherit;}
+.topbar{
+  position:sticky; top:env(safe-area-inset-top,0px); z-index:20;
+  margin:0 -16px 1.5rem; padding:0.9rem max(16px, env(safe-area-inset-left,0px)) 0.9rem max(16px, env(safe-area-inset-right,0px));
+  background:var(--bg); border-bottom:1px solid var(--line);
+}
+.topbar-inner{display:flex; align-items:center; gap:1.5rem; max-width:720px; margin:0 auto; flex-wrap:wrap;}
+.wordmark{font-family:var(--font-display); font-style:italic; font-weight:600; font-size:1.3rem; color:var(--accent); text-decoration:none;}
+.tabs{display:flex; gap:0.25rem;}
+.tab{text-decoration:none; padding:0.4rem 0.9rem; border-radius:999px; font-size:0.9rem; font-weight:500; color:var(--ink-soft);}
+.tab.active{background:var(--accent-soft); color:var(--ink);}
+main{max-width:720px; margin:0 auto;}
+.view-header{display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1.25rem; flex-wrap:wrap;}
+.view-header h1{font-size:1.5rem;}
+.btn{
+  font-family:var(--font-ui); font-weight:600; font-size:0.9rem; border-radius:10px;
+  padding:0.55rem 1rem; border:1px solid transparent; cursor:pointer; white-space:nowrap;
+}
+.btn-accent{background:var(--accent); color:var(--accent-ink);}
+.btn-ghost{background:transparent; border-color:var(--line); color:var(--ink);}
+.btn-sm{padding:0.35rem 0.7rem; font-size:0.8rem; border-radius:8px;}
+.btn-danger{color:var(--danger); border-color:var(--danger);}
+.btn:disabled{opacity:0.55; cursor:default;}
+.icon-btn{background:transparent; border:none; color:var(--ink-soft); cursor:pointer; font-size:0.9rem; line-height:1;}
+.link-btn{background:none; border:none; color:var(--accent); font-size:0.8rem; font-weight:600; cursor:pointer; padding:0; text-decoration:underline;}
+
+.state-msg{padding:3rem 1rem; text-align:center; color:var(--ink-soft);}
+.empty-state{padding:2.5rem 1.5rem; text-align:center; border:1px dashed var(--line); border-radius:16px; background:var(--surface);}
+.empty-state h3{margin-bottom:0.5rem; font-size:1.1rem;}
+.empty-state p{color:var(--ink-soft); margin:0; max-width:40ch; margin-inline:auto; line-height:1.5;}
+
+.books-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:1rem;}
+.filter-library{width:100%; margin-bottom:1rem; padding:0.6rem 0.8rem; border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--ink); font-size:0.92rem;}
+.book-card{
+  position:relative; display:flex; flex-direction:column; gap:0.5rem; min-width:0;
+  background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:1.1rem;
+  text-decoration:none; color:var(--ink); transition:border-color 0.15s;
+}
+.book-card:hover{border-color:var(--accent);}
+.book-card h3{font-size:1.05rem; line-height:1.3; padding-right:1.2rem;}
+.badge{display:inline-block; font-size:0.7rem; font-weight:700; letter-spacing:0.03em; text-transform:uppercase; padding:0.2rem 0.55rem; border-radius:999px; width:fit-content;}
+.badge-biblia{background:var(--mark-meditar); color:var(--mark-ink);}
+.badge-catecismo{background:var(--mark-pregunta); color:var(--mark-ink);}
+.badge-padres{background:var(--mark-clave); color:var(--mark-ink);}
+.badge-otro{background:var(--accent-soft); color:var(--mark-ink);}
+.book-meta{font-size:0.82rem; color:var(--ink-soft);}
+.progress{height:5px; border-radius:99px; background:var(--surface-2); overflow:hidden;}
+.progress-bar{height:100%; background:var(--accent); width:0;}
+.book-hl-count{font-size:0.78rem; color:var(--accent);}
+.book-author{font-size:0.82rem; color:var(--ink-soft); font-style:italic; margin-top:-0.3rem;}
+.book-pin{all:unset; cursor:pointer; font-size:0.78rem; color:var(--accent); font-weight:600;}
+.book-pin:hover{text-decoration:underline;}
+.book-card-actions{position:absolute; top:0.6rem; right:0.6rem; display:flex; gap:0.3rem;}
+.book-delete{position:static; font-size:0.8rem;}
+.book-delete.confirming{color:var(--danger); font-weight:700; font-size:0.72rem;}
+.book-edit{font-size:0.8rem;}
+
+.reader-header{display:flex; align-items:baseline; gap:0.75rem; flex-wrap:wrap; margin-bottom:1.25rem;}
+.back-link{text-decoration:none; color:var(--ink-soft); font-size:0.85rem; font-weight:600;}
+.reader-header h2{font-size:1.25rem; flex:1; min-width:0;}
+.reader-text{
+  font-family:var(--font-read); font-size:1.08rem; line-height:1.75; white-space:pre-wrap;
+  background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:1.75rem;
+  min-height:40vh; user-select:text;
+}
+.reader-text mark.hl{background:var(--mark-default); color:var(--mark-ink); border-radius:3px; padding:0 0.1em; cursor:pointer;}
+.reader-text mark.hl-meditar{background:var(--mark-meditar);}
+.reader-text mark.hl-pregunta{background:var(--mark-pregunta);}
+.reader-text mark.hl-clave{background:var(--mark-clave);}
+.reader-text mark.hl-cita{background:transparent; box-shadow:inset 0 0 0 2px var(--accent); cursor:default;}
+.reader-nav{display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-top:1rem; flex-wrap:wrap;}
+.page-indicator{font-size:0.85rem; color:var(--ink-soft); display:flex; align-items:center; gap:0.4rem;}
+.page-indicator input{width:4.5em; text-align:center; border:1px solid var(--line); border-radius:8px; padding:0.3rem; background:var(--surface); font-variant-numeric:tabular-nums;}
+.loading-state, .error-state{padding:3rem 1.5rem; text-align:center; color:var(--ink-soft); background:var(--surface); border:1px solid var(--line); border-radius:16px;}
+
+.selection-toolbar{position:absolute; z-index:30; display:flex; gap:0.25rem; background:var(--ink); border-radius:10px; padding:0.3rem; box-shadow:0 6px 20px rgba(0,0,0,0.25);}
+.sel-btn{background:none; border:none; color:var(--bg); font-size:0.8rem; font-weight:600; padding:0.4rem 0.6rem; border-radius:7px; cursor:pointer; white-space:nowrap;}
+.sel-btn:hover{background:rgba(255,255,255,0.15);}
+.sel-btn:disabled{opacity:0.5;}
+
+.cuaderno-actions{display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;}
+.cuaderno-actions select{padding:0.45rem 0.6rem; border-radius:8px; border:1px solid var(--line); background:var(--surface); max-width:12rem;}
+.event-chips{display:flex; gap:0.5rem; flex-wrap:wrap; margin:1rem 0;}
+.event-chip{position:relative; display:flex; align-items:center; gap:0.4rem; border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:999px; padding:0.4rem 0.5rem 0.4rem 0.9rem; font-size:0.85rem; font-weight:600; cursor:pointer;}
+.event-chip.active{border-color:var(--accent); background:var(--accent-soft);}
+.event-chip-edit{all:unset; cursor:pointer; font-size:0.75rem; padding:0.1rem 0.3rem; border-radius:999px;}
+.event-chip-edit:hover{background:rgba(0,0,0,0.08);}
+.event-chip-new{border:1px dashed var(--line); background:transparent; color:var(--ink-soft); border-radius:999px; padding:0.4rem 0.9rem; font-size:0.85rem; font-weight:600; cursor:pointer;}
+.event-composer{display:flex; flex-direction:column; gap:0.5rem; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:1rem; margin-bottom:1.25rem;}
+.event-composer textarea{padding:0.6rem 0.7rem; border:1px solid var(--line); border-radius:9px; background:var(--bg); color:var(--ink); font-family:var(--font-ui); resize:vertical;}
+.event-composer button{align-self:flex-end;}
+.entry-event-tag{display:inline-block; font-size:0.72rem; font-weight:700; color:var(--accent); background:var(--accent-soft); border-radius:999px; padding:0.15rem 0.55rem; margin-right:0.5rem;}
+.entry-move-select{font-size:0.78rem; padding:0.3rem 0.5rem; border-radius:7px; border:1px solid var(--line); background:var(--surface); color:var(--ink);}
+.cuaderno-list{display:flex; flex-direction:column; gap:1rem;}
+.entry-card{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:1.25rem; min-width:0;}
+.entry-header{display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; font-size:0.8rem; color:var(--ink-soft); margin-bottom:0.6rem;}
+.entry-book-link{font-weight:700; color:var(--accent); text-decoration:none;}
+.entry-quote{font-family:var(--font-read); font-size:1.05rem; line-height:1.6; margin:0 0 0.75rem; padding-left:0.9rem; border-left:3px solid var(--accent-soft); color:var(--ink);}
+.tag-dots{display:flex; gap:0.4rem; margin-bottom:0.75rem;}
+.tag-dot{width:18px; height:18px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0;}
+.tag-dot-meditar{background:var(--mark-meditar);}
+.tag-dot-pregunta{background:var(--mark-pregunta);}
+.tag-dot-clave{background:var(--mark-clave);}
+.tag-dot.active{border-color:var(--ink);}
+.entry-block-label{font-size:0.72rem; font-weight:700; letter-spacing:0.03em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:0.25rem;}
+.entry-ai, .entry-note{background:var(--surface-2); border-radius:10px; padding:0.75rem 0.9rem; margin-bottom:0.75rem;}
+.entry-ai p, .entry-note p{margin:0 0 0.4rem; line-height:1.5; font-size:0.92rem;}
+.entry-actions{display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.25rem;}
+
+.modal-backdrop{position:fixed; inset:0; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; z-index:50; padding:1rem;}
+.modal{background:var(--surface); border-radius:16px; padding:1.5rem; width:100%; max-width:420px; max-height:85vh; overflow:auto;}
+.modal h2{font-size:1.15rem; margin-bottom:1rem;}
+.modal label{display:block; font-size:0.82rem; font-weight:600; color:var(--ink-soft); margin-bottom:0.9rem;}
+.modal input, .modal select, .modal textarea{display:block; width:100%; margin-top:0.35rem; padding:0.55rem 0.7rem; border:1px solid var(--line); border-radius:9px; background:var(--bg); color:var(--ink);}
+.modal textarea{resize:vertical; font-family:var(--font-ui);}
+.modal-actions{display:flex; justify-content:flex-end; gap:0.6rem; margin-top:0.5rem;}
+.status-line{min-height:1.2em; font-size:0.82rem; color:var(--danger); margin-top:0.6rem;}
+.passage-preview{font-family:var(--font-read); font-size:0.95rem; color:var(--ink-soft); border-left:3px solid var(--accent-soft); padding-left:0.8rem; margin:0 0 1rem;}
+
+.toast{position:fixed; left:50%; bottom:1.5rem; transform:translate(-50%,16px); background:var(--ink); color:var(--bg); padding:0.65rem 1.1rem; border-radius:999px; font-size:0.85rem; font-weight:600; opacity:0; pointer-events:none; transition:all 0.2s; z-index:60;}
+.toast.show{opacity:1; transform:translate(-50%,0);}
+.toast-error{background:var(--danger);}
+
+.listen-bar{position:fixed; left:50%; bottom:4.8rem; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:0.55rem 0.6rem 0.55rem 1rem; border-radius:999px; font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:0.75rem; z-index:55; box-shadow:0 6px 20px rgba(0,0,0,0.25);}
+.listen-bar button{background:rgba(255,255,255,0.18); color:var(--bg); border:none; border-radius:999px; padding:0.35rem 0.75rem; font-size:0.78rem; font-weight:700; cursor:pointer;}
+.listen-bar button:hover{background:rgba(255,255,255,0.3);}
+
+.reader-toolbar{display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;}
+.modal-wide{max-width:560px;}
+.toc-list{max-height:60vh; overflow:auto; display:flex; flex-direction:column; border:1px solid var(--line); border-radius:10px;}
+.toc-item{all:unset; cursor:pointer; display:block; padding:0.5rem 0.9rem; font-size:0.9rem; border-bottom:1px solid var(--line);}
+.toc-item:hover{background:var(--surface-2);}
+.toc-item:last-child{border-bottom:none;}
+.toc-label{padding:0.5rem 0.9rem; font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; color:var(--ink-soft); background:var(--surface-2); border-bottom:1px solid var(--line);}
+.search-controls{display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;}
+.search-controls input{flex:1; min-width:140px; padding:0.55rem 0.7rem; border:1px solid var(--line); border-radius:9px; background:var(--bg); color:var(--ink);}
+.search-controls select{padding:0.5rem; border-radius:9px; border:1px solid var(--line); background:var(--bg); max-width:11rem;}
+.search-results{max-height:50vh; overflow:auto; display:flex; flex-direction:column; gap:0.9rem;}
+.search-group-title{font-size:0.85rem; margin:0 0 0.4rem; color:var(--accent);}
+.search-hit-item{all:unset; cursor:pointer; display:flex; gap:0.6rem; padding:0.5rem 0.6rem; border-radius:8px; font-size:0.85rem; align-items:baseline; width:100%;}
+.search-hit-item:hover{background:var(--surface-2);}
+.search-hit-page{flex-shrink:0; font-weight:700; color:var(--ink-soft); font-variant-numeric:tabular-nums; font-size:0.78rem;}
+.search-hit-snippet{color:var(--ink); line-height:1.4; min-width:0;}
+.search-hit-more{font-size:0.78rem; color:var(--ink-soft); padding:0.3rem 0.6rem;}
+.cite-row{display:flex; gap:0.6rem;}
+.cite-row > label{flex:1;}
+.cite-result{font-size:0.82rem; color:var(--ink-soft); margin:0.6rem 0 0;}
+
+@media (max-width:460px){
+  .books-grid{grid-template-columns:1fr;}
+  .view-header{align-items:flex-start;}
+  .reader-text{padding:1.1rem; font-size:1.02rem;}
+}
+</style>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a href="./" class="tab" style="padding-left:0">← 🎵 Cancionero</a><a href="#biblioteca" class="wordmark">Lectio</a><span id="lxGName" class="book-meta"></span><select id="lxGrupo" class="entry-move-select" hidden></select>
+    <nav class="tabs">
+      <a href="#biblioteca" class="tab" data-tab="biblioteca">Biblioteca</a>
+      <a href="#cuaderno" class="tab" data-tab="cuaderno">Cuaderno</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section id="view-biblioteca" hidden>
+    <div class="view-header">
+      <h1>Tu biblioteca</h1>
+      <div style="display:flex; gap:0.5rem;">
+        <button id="btn-search-library" class="btn btn-ghost">🔍 Buscar</button>
+        <button id="btn-add-book" class="btn btn-accent">+ Subir libro</button>
+      </div>
+    </div>
+    <input type="text" id="input-filter-library" class="filter-library" placeholder="Filtrar por título o autor…">
+    <div id="books-grid" class="books-grid"></div>
+  </section>
+
+  <section id="view-reader" hidden>
+    <div class="reader-header">
+      <a href="#biblioteca" class="back-link">← Biblioteca</a>
+      <h2 id="reader-title"></h2>
+      <span id="reader-type-badge" class="badge"></span>
+      <span id="reader-part-badge" class="badge" hidden></span>
+      <button id="btn-edit-book-reader" class="icon-btn" type="button" title="Editar título/autor">✏️</button>
+    </div>
+    <div class="reader-toolbar">
+      <button id="btn-toc" class="btn btn-ghost btn-sm" hidden>📑 Índice</button>
+      <button id="btn-cite" class="btn btn-ghost btn-sm" hidden>📖 Ir a cita</button>
+      <button id="btn-search-book" class="btn btn-ghost btn-sm">🔍 Buscar en este libro</button>
+      <button id="btn-pin-page" class="btn btn-ghost btn-sm">📌 Marcar esta página</button>
+      <button id="btn-listen" class="btn btn-ghost btn-sm">🔊 Escuchar</button>
+    </div>
+    <div id="reader-loading" class="loading-state" hidden></div>
+    <div id="reader-error" class="error-state" hidden></div>
+    <article id="reader-text" class="reader-text" hidden></article>
+    <div id="reader-nav" class="reader-nav" hidden>
+      <button id="btn-prev-page" class="btn btn-ghost">← Anterior</button>
+      <span class="page-indicator">Pág. <input id="input-page-jump" type="number" min="1"> de <span id="reader-total-pages"></span></span>
+      <button id="btn-next-page" class="btn btn-ghost">Siguiente →</button>
+    </div>
+  </section>
+
+  <section id="view-grupo" hidden>
+    <div class="reader-header">
+      <a href="#biblioteca" class="back-link">← Biblioteca</a>
+      <h2 id="grupo-title"></h2>
+    </div>
+    <div id="grupo-grid" class="books-grid"></div>
+  </section>
+
+  <section id="view-cuaderno" hidden>
+    <div class="view-header">
+      <h1>Tu cuaderno espiritual</h1>
+      <div class="cuaderno-actions">
+        <select id="filter-book"><option value="">Todos los libros</option></select>
+        <button id="btn-copy-all" class="btn btn-ghost btn-sm">Copiar todo</button>
+      </div>
+    </div>
+    <div id="event-chips" class="event-chips"></div>
+    <div id="event-composer" class="event-composer" hidden>
+      <textarea id="input-event-note" rows="3" placeholder="Escribí algo para este evento…"></textarea>
+      <button id="btn-add-event-note" class="btn btn-accent btn-sm">Agregar al cuaderno</button>
+    </div>
+    <div id="cuaderno-list" class="cuaderno-list"></div>
+  </section>
+
+  <section id="view-nodb" hidden>
+    <div class="empty-state" style="margin-top:3rem;">
+      <h3>No pudimos abrir tu biblioteca</h3>
+      <p>Cargando…</p>
+    </div>
+  </section>
+</main>
+
+<div id="selection-toolbar" class="selection-toolbar" hidden>
+  <button data-action="mark" class="sel-btn">🔖 Marcar</button>
+  <button data-action="note" class="sel-btn">📝 + nota</button>
+  <button data-action="ai" class="sel-btn">✨ Resumen IA</button>
+</div>
+
+<div id="modal-add-book" class="modal-backdrop" hidden>
+  <div class="modal">
+    <h2>Agregar libro</h2>
+    <label>Archivo PDF
+      <input type="file" id="input-pdf" accept="application/pdf">
+    </label>
+    <label>Título
+      <input type="text" id="input-title" placeholder="Ej: Biblia de Jerusalén">
+    </label>
+    <label>Autor <span style="font-weight:400; text-transform:none; letter-spacing:0;">(opcional)</span>
+      <input type="text" id="input-author" placeholder="Ej: Santo Tomás de Aquino">
+    </label>
+    <label>Tipo
+      <select id="input-type">
+        <option value="biblia">Biblia</option>
+        <option value="catecismo">Catecismo</option>
+        <option value="padres">Padres de la Iglesia</option>
+        <option value="otro">Otro</option>
+      </select>
+    </label>
+    <div class="modal-actions">
+      <button id="btn-cancel-add" class="btn btn-ghost">Cancelar</button>
+      <button id="btn-confirm-add" class="btn btn-accent">Subir</button>
+    </div>
+    <p id="add-book-status" class="status-line"></p>
+  </div>
+</div>
+
+<div id="modal-event" class="modal-backdrop" hidden>
+  <div class="modal">
+    <h2 id="event-modal-title">Nuevo evento</h2>
+    <label>Nombre
+      <input type="text" id="input-event-title" placeholder="Ej: Retiro, Convivencia…">
+    </label>
+    <div class="modal-actions">
+      <button id="btn-delete-event" class="btn btn-ghost" style="color:var(--danger); margin-right:auto;" hidden>Eliminar evento</button>
+      <button id="btn-cancel-event" class="btn btn-ghost">Cancelar</button>
+      <button id="btn-save-event" class="btn btn-accent">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-edit-book" class="modal-backdrop" hidden>
+  <div class="modal">
+    <h2>Editar libro</h2>
+    <label>Título
+      <input type="text" id="edit-title">
+    </label>
+    <label>Autor <span style="font-weight:400; text-transform:none; letter-spacing:0;">(opcional)</span>
+      <input type="text" id="edit-author">
+    </label>
+    <div class="modal-actions">
+      <button id="btn-cancel-edit-book" class="btn btn-ghost">Cancelar</button>
+      <button id="btn-save-edit-book" class="btn btn-accent">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-note" class="modal-backdrop" hidden>
+  <div class="modal">
+    <h2>Tu nota</h2>
+    <blockquote id="note-passage-preview" class="passage-preview"></blockquote>
+    <textarea id="input-note-text" rows="5" placeholder="Qué te dice este pasaje…"></textarea>
+    <div class="modal-actions">
+      <button id="btn-cancel-note" class="btn btn-ghost">Cancelar</button>
+      <button id="btn-save-note" class="btn btn-accent">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-toc" class="modal-backdrop" hidden>
+  <div class="modal modal-wide">
+    <h2>Índice</h2>
+    <div id="toc-list" class="toc-list"></div>
+    <div class="modal-actions">
+      <button id="btn-close-toc" class="btn btn-ghost">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-cite" class="modal-backdrop" hidden>
+  <div class="modal">
+    <h2>Ir a una cita</h2>
+    <label>Libro
+      <select id="cite-book"></select>
+    </label>
+    <div class="cite-row">
+      <label>Capítulo
+        <input type="number" id="cite-chapter" min="1" placeholder="Ej: 2">
+      </label>
+      <label>Versículo desde
+        <input type="number" id="cite-verse-from" min="1" placeholder="Ej: 21">
+      </label>
+      <label>hasta
+        <input type="number" id="cite-verse-to" min="1" placeholder="Ej: 25">
+      </label>
+    </div>
+    <p id="cite-status" class="status-line"></p>
+    <div class="modal-actions">
+      <button id="btn-cancel-cite" class="btn btn-ghost">Cancelar</button>
+      <button id="btn-run-cite" class="btn btn-accent">Ir</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-search" class="modal-backdrop" hidden>
+  <div class="modal modal-wide">
+    <h2>Buscar</h2>
+    <div class="search-controls">
+      <input type="text" id="input-search-query" placeholder="Qué querés encontrar…">
+      <select id="search-scope"></select>
+      <button id="btn-run-search" class="btn btn-accent btn-sm">Buscar</button>
+    </div>
+    <div id="search-progress" class="status-line"></div>
+    <div id="search-results" class="search-results"></div>
+    <div class="modal-actions">
+      <button id="btn-close-search" class="btn btn-ghost">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div id="listen-bar" class="listen-bar" hidden>
+  <span id="listen-status">🔊 Escuchando…</span>
+  <button id="btn-listen-stop" type="button">⏹ Detener</button>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600;700&display=swap">
+<style>[data-action="ai"]{display:none!important}</style>
+<script>
+window.__lectioReady = new Promise(function(r){ window.__lectioResolve = r; });
+window.claude = { use: function(name){ return window.__lectioReady.then(function(api){ return api[name] || null; }); } };
+</script>
+<script type="module" src="lectio-shim.js?v=1795528694"></script>
+
+<script>
+(function(){
+  'use strict';
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  var db = null, assetsCap = null, sampleFn = null;
+  var books = [], highlights = [], groups = [], events = [];
+  var booksLoaded = false, highlightsLoaded = false, groupsLoaded = false, eventsLoaded = false;
+  var activeEventId = null;
+  var currentBookId = null, currentPage = 1, pendingJumpPage = null;
+  var pdfState = {}, pdfLoadPromises = {};
+  var pendingSelection = null, noteContext = null;
+  var showPageToken = 0;
+  var transientHighlight = null;
+  var verseIndexCache = {};
+
+  function jumpToBookPage(bookId, page){
+    pendingJumpPage = page;
+    if (currentRoute() === 'libro-' + bookId){ renderReaderView(bookId); }
+    else { location.hash = 'libro-' + bookId; }
+  }
+
+  var TAGS = [
+    {key:'meditar', label:'Para meditar'},
+    {key:'pregunta', label:'Pregunta'},
+    {key:'clave', label:'Clave'}
+  ];
+
+  function $(id){ return document.getElementById(id); }
+  function typeLabel(t){ return {biblia:'Biblia', catecismo:'Catecismo', padres:'Padres de la Iglesia', otro:'Otro'}[t] || 'Otro'; }
+  function formatDate(ts){
+    try{ return new Date(ts).toLocaleDateString('es-AR', {day:'numeric', month:'short', year:'numeric'}); }
+    catch(e){ return ''; }
+  }
+  function currentRoute(){ return location.hash.slice(1) || 'biblioteca'; }
+
+  function showToast(msg, type){
+    var el = $('toast');
+    el.textContent = msg;
+    el.className = 'toast show' + (type==='error' ? ' toast-error' : '');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function(){ el.classList.remove('show'); }, 2600);
+  }
+
+  function showView(name){
+    $('view-biblioteca').hidden = name!=='biblioteca';
+    $('view-reader').hidden = name!=='reader';
+    $('view-grupo').hidden = name!=='grupo';
+    $('view-cuaderno').hidden = name!=='cuaderno';
+    $('view-nodb').hidden = name!=='nodb';
+    var tabs = document.querySelectorAll('.tab');
+    for (var i=0;i<tabs.length;i++){
+      var t = tabs[i];
+      t.classList.toggle('active', t.dataset.tab===name || (name==='reader' && t.dataset.tab==='biblioteca'));
+    }
+    if (name!=='reader') hideSelectionToolbar();
+    if (name!=='reader' && listenActive) stopListening();
+  }
+
+  function loadingState(msg){ var d=document.createElement('div'); d.className='state-msg'; d.textContent=msg; return d; }
+  function emptyState(title, body){
+    var wrap=document.createElement('div'); wrap.className='empty-state';
+    var h=document.createElement('h3'); h.textContent=title;
+    var p=document.createElement('p'); p.textContent=body;
+    wrap.appendChild(h); wrap.appendChild(p); return wrap;
+  }
+
+  // ---------- routing ----------
+  function renderRoute(){
+    var hash = currentRoute();
+    if (!db && (booksLoaded || highlightsLoaded) === false && db === null && initDone){
+      // handled by renderNoDb below once init completes
+    }
+    if (initDone && db === null){ showView('nodb'); return; }
+    if (hash.indexOf('libro-')===0) renderReaderView(hash.slice(6));
+    else if (hash.indexOf('grupo-')===0) renderGroupView(hash.slice(6));
+    else if (hash==='cuaderno') renderCuadernoView();
+    else renderBibliotecaView();
+  }
+  window.addEventListener('hashchange', renderRoute);
+
+  // ---------- biblioteca ----------
+  function renderBibliotecaView(){
+    showView('biblioteca');
+    var grid = $('books-grid');
+    grid.innerHTML = '';
+    if (!booksLoaded){ grid.appendChild(loadingState('Cargando tu biblioteca…')); return; }
+    var entries = buildLibraryEntries();
+    if (!entries.length){
+      grid.appendChild(emptyState('Tu biblioteca está vacía', 'Subí un PDF — tu Biblia, el Catecismo o los Padres de la Iglesia — para empezar a leer y marcar pasajes.'));
+      return;
+    }
+    var q = normalizeForSearch($('input-filter-library').value.trim());
+    if (q){
+      entries = entries.filter(function(e){
+        var item = e.kind==='group' ? e.group : e.book;
+        var hay = normalizeForSearch((item.title||'') + ' ' + (item.author||''));
+        return hay.indexOf(q) !== -1;
+      });
+    }
+    if (!entries.length){
+      grid.appendChild(emptyState('Nada por acá', 'No encontramos libros que coincidan con esa búsqueda.'));
+      return;
+    }
+    entries.forEach(function(e){
+      grid.appendChild(e.kind==='group' ? groupCard(e.group, e.parts) : bookCard(e.book));
+    });
+  }
+
+  function buildLibraryEntries(){
+    var byGroup = {};
+    var entries = [];
+    books.forEach(function(b){
+      if (b.groupId){
+        if (!byGroup[b.groupId]) byGroup[b.groupId] = [];
+        byGroup[b.groupId].push(b);
+      } else {
+        entries.push({kind:'single', book:b, sortKey:b.addedAt||0});
+      }
+    });
+    Object.keys(byGroup).forEach(function(gid){
+      var parts = byGroup[gid];
+      var group = groups.filter(function(g){ return g.id===gid; })[0];
+      if (!group) group = {id:gid, title:parts[0].title, type:parts[0].type, lastPartIndex:1};
+      var minAdded = Math.min.apply(null, parts.map(function(p){ return p.addedAt||0; }));
+      entries.push({kind:'group', group:group, parts:parts, sortKey:minAdded});
+    });
+    entries.sort(function(a,b){ return b.sortKey - a.sortKey; });
+    return entries;
+  }
+
+  function groupCard(group, parts){
+    var sortedParts = parts.slice().sort(function(a,b){ return a.partIndex - b.partIndex; });
+    var lastIdx = Math.min(Math.max(group.lastPartIndex||1, 1), sortedParts.length) - 1;
+    var resumePart = sortedParts[lastIdx];
+    var hlCount = highlights.filter(function(h){ return sortedParts.some(function(p){ return p.id===h.bookId; }); }).length;
+
+    var card = document.createElement('a');
+    card.href = '#grupo-' + group.id;
+    card.className = 'book-card';
+
+    var badge = document.createElement('span');
+    badge.className = 'badge badge-' + (group.type || 'otro');
+    badge.textContent = typeLabel(group.type);
+
+    var title = document.createElement('h3');
+    title.textContent = group.title;
+
+    var meta = document.createElement('div');
+    meta.className = 'book-meta';
+    meta.textContent = 'Parte ' + (lastIdx+1) + ' de ' + sortedParts.length;
+
+    var progress = document.createElement('div'); progress.className = 'progress';
+    var bar = document.createElement('div'); bar.className = 'progress-bar';
+    var frac = 0;
+    if (resumePart.numPages) frac = Math.min(1, (resumePart.lastPage||1) / resumePart.numPages);
+    bar.style.width = Math.round(((lastIdx + frac) / sortedParts.length) * 100) + '%';
+    progress.appendChild(bar);
+
+    var hlLine = document.createElement('div');
+    hlLine.className = 'book-hl-count';
+    hlLine.textContent = hlCount ? (hlCount + (hlCount===1 ? ' pasaje marcado' : ' pasajes marcados')) : '';
+
+    card.appendChild(badge);
+    if (group.author){ var authorEl = document.createElement('div'); authorEl.className = 'book-author'; authorEl.textContent = group.author; card.appendChild(authorEl); }
+    card.appendChild(title); card.appendChild(meta);
+    card.appendChild(progress); card.appendChild(hlLine);
+    card.appendChild(cardActions({kind:'group', group:group, parts:sortedParts}));
+    return card;
+  }
+
+  function cardActions(entry){
+    var wrap = document.createElement('div'); wrap.className = 'book-card-actions';
+    var editBtn = document.createElement('button');
+    editBtn.className = 'icon-btn book-edit'; editBtn.type = 'button'; editBtn.title = 'Editar título/autor'; editBtn.textContent = '✏️';
+    editBtn.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); openEditBookModal(entry); });
+    var delBtn = document.createElement('button');
+    delBtn.className = 'icon-btn book-delete'; delBtn.type = 'button'; delBtn.title = 'Eliminar libro'; delBtn.textContent = '✕';
+    delBtn.addEventListener('click', function(e){
+      e.preventDefault(); e.stopPropagation();
+      if (entry.kind==='group') confirmDeleteGroup(entry.group, entry.parts, delBtn);
+      else confirmDeleteBook(entry.book, delBtn);
+    });
+    wrap.appendChild(editBtn); wrap.appendChild(delBtn);
+    return wrap;
+  }
+
+  function openEditBookModal(entry){
+    var current = entry.kind==='group' ? entry.group : entry.book;
+    editContext = entry;
+    $('edit-title').value = current.title || '';
+    $('edit-author').value = current.author || '';
+    $('modal-edit-book').hidden = false;
+  }
+  var editContext = null;
+  $('btn-cancel-edit-book').addEventListener('click', function(){ $('modal-edit-book').hidden = true; editContext = null; });
+  $('btn-save-edit-book').addEventListener('click', function(){
+    if (!editContext || !db) return;
+    var title = $('edit-title').value.trim();
+    var author = $('edit-author').value.trim();
+    if (!title){ showToast('Ponele un título.', 'error'); return; }
+    var writes = [];
+    if (editContext.kind==='group'){
+      writes.push(db.collection('groups').doc(editContext.group.id).update({title:title, author:author||null}));
+      editContext.parts.forEach(function(p){
+        writes.push(db.collection('books').doc(p.id).update({title:title}));
+      });
+    } else {
+      writes.push(db.collection('books').doc(editContext.book.id).update({title:title, author:author||null}));
+    }
+    Promise.all(writes).then(function(){
+      $('modal-edit-book').hidden = true;
+      editContext = null;
+      showToast('Libro actualizado.');
+    }).catch(function(e){ console.error(e); showToast('No se pudo guardar.', 'error'); });
+  });
+
+  function confirmDeleteGroup(group, parts, btn){
+    if (btn.dataset.confirming){ doDeleteGroup(group, parts); return; }
+    btn.dataset.confirming = '1';
+    btn.textContent = '¿Seguro?'; btn.classList.add('confirming');
+    setTimeout(function(){
+      if (btn.dataset.confirming){ delete btn.dataset.confirming; btn.textContent = '✕'; btn.classList.remove('confirming'); }
+    }, 3000);
+  }
+  function doDeleteGroup(group, parts){
+    var toDelete = highlights.filter(function(h){ return parts.some(function(p){ return p.id===h.bookId; }); });
+    Promise.all(toDelete.map(function(h){ return db.collection('highlights').doc(h.id).delete().catch(function(){}); }))
+      .then(function(){ return Promise.all(parts.map(function(p){ return db.collection('books').doc(p.id).delete(); })); })
+      .then(function(){ return db.collection('groups').doc(group.id).delete().catch(function(){}); })
+      .then(function(){
+        if (assetsCap) parts.forEach(function(p){ if (p.assetId) assetsCap.delete(p.assetId).catch(function(){}); });
+        if (currentRoute()==='grupo-'+group.id || parts.some(function(p){ return currentRoute()==='libro-'+p.id; })) location.hash = 'biblioteca';
+        showToast('Libro eliminado.');
+      })
+      .catch(function(e){ console.error(e); showToast('No se pudo eliminar el libro.', 'error'); });
+  }
+
+  function renderGroupView(groupId){
+    showView('grupo');
+    var grid0 = $('grupo-grid');
+    if (!booksLoaded || !groupsLoaded){ grid0.innerHTML = ''; grid0.appendChild(loadingState('Cargando…')); return; }
+    var parts = books.filter(function(b){ return b.groupId===groupId; }).sort(function(a,b){ return a.partIndex-b.partIndex; });
+    if (!parts.length){ location.hash = 'biblioteca'; return; }
+    var group = groups.filter(function(g){ return g.id===groupId; })[0] || {id:groupId, title:parts[0].title, type:parts[0].type};
+    $('grupo-title').textContent = group.title;
+    var grid = $('grupo-grid');
+    grid.innerHTML = '';
+    parts.forEach(function(p){ grid.appendChild(partCard(p)); });
+  }
+
+  function partCard(part){
+    var hlCount = highlights.filter(function(h){ return h.bookId===part.id; }).length;
+    var card = document.createElement('a');
+    card.href = '#libro-' + part.id;
+    card.className = 'book-card';
+
+    var badge = document.createElement('span');
+    badge.className = 'badge badge-' + (part.type || 'otro');
+    badge.textContent = 'Parte ' + part.partIndex + ' de ' + part.partTotal;
+
+    var title = document.createElement('h3');
+    title.textContent = part.title + ' — Parte ' + part.partIndex;
+
+    var meta = document.createElement('div');
+    meta.className = 'book-meta';
+    meta.textContent = part.numPages ? ('Pág. ' + (part.lastPage||1) + ' de ' + part.numPages) : 'Sin abrir todavía';
+
+    var progress = document.createElement('div'); progress.className = 'progress';
+    var bar = document.createElement('div'); bar.className = 'progress-bar';
+    if (part.numPages) bar.style.width = Math.min(100, Math.round(((part.lastPage||1)/part.numPages)*100)) + '%';
+    progress.appendChild(bar);
+
+    var hlLine = document.createElement('div');
+    hlLine.className = 'book-hl-count';
+    hlLine.textContent = hlCount ? (hlCount + (hlCount===1 ? ' pasaje marcado' : ' pasajes marcados')) : '';
+
+    card.appendChild(badge); card.appendChild(title); card.appendChild(meta);
+    card.appendChild(progress); card.appendChild(hlLine);
+    if (part.pinnedPage){ card.appendChild(pinLine(part)); }
+    return card;
+  }
+
+  function pinLine(book){
+    var el = document.createElement('button');
+    el.type = 'button'; el.className = 'book-pin';
+    el.textContent = '📌 Ir al marcador (pág. ' + book.pinnedPage + ')';
+    el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); jumpToBookPage(book.id, book.pinnedPage); });
+    return el;
+  }
+
+  function bookCard(book){
+    var hlCount = highlights.filter(function(h){ return h.bookId===book.id; }).length;
+    var card = document.createElement('a');
+    card.href = '#libro-' + book.id;
+    card.className = 'book-card';
+
+    var badge = document.createElement('span');
+    badge.className = 'badge badge-' + (book.type || 'otro');
+    badge.textContent = typeLabel(book.type);
+
+    var title = document.createElement('h3');
+    title.textContent = book.title;
+
+    var meta = document.createElement('div');
+    meta.className = 'book-meta';
+    meta.textContent = book.numPages ? ('Pág. ' + (book.lastPage||1) + ' de ' + book.numPages) : 'Sin abrir todavía';
+
+    var progress = document.createElement('div'); progress.className='progress';
+    var bar = document.createElement('div'); bar.className='progress-bar';
+    if (book.numPages) bar.style.width = Math.min(100, Math.round(((book.lastPage||1)/book.numPages)*100)) + '%';
+    progress.appendChild(bar);
+
+    var hlLine = document.createElement('div');
+    hlLine.className = 'book-hl-count';
+    hlLine.textContent = hlCount ? (hlCount + (hlCount===1 ? ' pasaje marcado' : ' pasajes marcados')) : '';
+
+    card.appendChild(badge);
+    if (book.author){ var authorEl = document.createElement('div'); authorEl.className = 'book-author'; authorEl.textContent = book.author; card.appendChild(authorEl); }
+    card.appendChild(title); card.appendChild(meta);
+    card.appendChild(progress); card.appendChild(hlLine);
+    if (book.pinnedPage){ card.appendChild(pinLine(book)); }
+    card.appendChild(cardActions({kind:'single', book:book}));
+    return card;
+  }
+
+  function confirmDeleteBook(book, btn){
+    if (btn.dataset.confirming){ doDeleteBook(book); return; }
+    btn.dataset.confirming = '1';
+    btn.textContent = '¿Seguro?';
+    btn.classList.add('confirming');
+    setTimeout(function(){
+      if (btn.dataset.confirming){ delete btn.dataset.confirming; btn.textContent='✕'; btn.classList.remove('confirming'); }
+    }, 3000);
+  }
+  function doDeleteBook(book){
+    var toDelete = highlights.filter(function(h){ return h.bookId===book.id; });
+    Promise.all(toDelete.map(function(h){ return db.collection('highlights').doc(h.id).delete().catch(function(){}); }))
+      .then(function(){ return db.collection('books').doc(book.id).delete(); })
+      .then(function(){
+        if (assetsCap && book.assetId) assetsCap.delete(book.assetId).catch(function(){});
+        if (currentRoute() === 'libro-'+book.id) location.hash = 'biblioteca';
+        showToast('Libro eliminado.');
+      })
+      .catch(function(e){ console.error(e); showToast('No se pudo eliminar el libro.', 'error'); });
+  }
+
+  // ---------- add book modal ----------
+  $('btn-add-book').addEventListener('click', function(){
+    if (!assetsCap){ showToast('No tenés permiso para subir libros en esta vista.', 'error'); return; }
+    $('modal-add-book').hidden = false;
+    $('input-pdf').value = '';
+    $('input-title').value = '';
+    $('input-author').value = '';
+    $('add-book-status').textContent = '';
+  });
+  $('input-pdf').addEventListener('change', function(e){
+    var f = e.target.files[0];
+    if (f && !$('input-title').value) $('input-title').value = f.name.replace(/\.pdf$/i, '');
+  });
+  $('btn-cancel-add').addEventListener('click', function(){ $('modal-add-book').hidden = true; });
+  $('btn-confirm-add').addEventListener('click', function(){
+    var file = $('input-pdf').files[0];
+    var title = $('input-title').value.trim();
+    var author = $('input-author').value.trim();
+    var type = $('input-type').value;
+    var statusEl = $('add-book-status');
+    if (!file){ statusEl.textContent = 'Elegí un archivo PDF.'; return; }
+    if (!title){ statusEl.textContent = 'Ponele un título.'; return; }
+    if (!assetsCap || !db){ statusEl.textContent = 'No disponible ahora mismo.'; return; }
+    var btn = $('btn-confirm-add');
+    btn.disabled = true; statusEl.textContent = 'Subiendo…';
+    assetsCap.upload(file, {type:'application/pdf'}).then(function(res){
+      var id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random().toString(16).slice(2));
+      var newBook = {id:id, title:title, author:author||null, type:type, assetId:res.id, addedAt:Date.now(), numPages:null, lastPage:1, pinnedPage:null};
+      return db.collection('books').doc(id).set(newBook).then(function(){
+        if (!books.some(function(b){ return b.id===id; })) books.unshift(newBook);
+        booksLoaded = true;
+        $('modal-add-book').hidden = true;
+        location.hash = 'libro-' + id;
+      });
+    }).catch(function(e){
+      console.error(e);
+      statusEl.textContent = uploadErrorMessage(e);
+    }).finally(function(){ btn.disabled = false; });
+  });
+  function uploadErrorMessage(e){
+    var map = {
+      too_large: 'El archivo es muy pesado (máximo 50 MB). Si es más grande, dividilo en partes.',
+      unsupported_type: 'Ese archivo no parece ser un PDF válido.',
+      not_granted: 'No tenés permiso para subir archivos acá.',
+      quota_or_state: 'Se llenó el espacio disponible para archivos.',
+      rate_limited: 'Probá de nuevo en unos segundos.'
+    };
+    return (e && map[e.code]) || 'No se pudo subir el archivo. Probá de nuevo.';
+  }
+
+  // ---------- reader ----------
+  function setReaderLoading(msg){
+    $('reader-loading').hidden=false; $('reader-loading').textContent=msg;
+    $('reader-error').hidden=true; $('reader-text').hidden=true; $('reader-nav').hidden=true;
+  }
+  function setReaderError(msg){
+    $('reader-error').hidden=false; $('reader-error').textContent=msg;
+    $('reader-loading').hidden=true; $('reader-text').hidden=true; $('reader-nav').hidden=true;
+  }
+
+  function ensurePdfLoaded(book){
+    if (pdfState[book.id]) return Promise.resolve();
+    if (pdfLoadPromises[book.id]) return pdfLoadPromises[book.id];
+    pdfLoadPromises[book.id] = (function(){
+      return window.__lectioAssetUrl(book.assetId).then(function(url){ return fetch(url); }).then(function(resp){
+        if (!resp.ok) throw new Error('fetch_failed');
+        return resp.arrayBuffer();
+      }).then(function(buf){
+        return pdfjsLib.getDocument({data: buf}).promise;
+      }).then(function(pdf){
+        pdfState[book.id] = {pdfDoc: pdf, numPages: pdf.numPages, textCache: {}, outline: null};
+        if (!book.numPages){
+          db.collection('books').doc(book.id).update({numPages: pdf.numPages}).catch(function(){});
+        }
+        loadOutline(pdf).then(function(outline){
+          if (pdfState[book.id]) pdfState[book.id].outline = outline;
+          if (currentBookId === book.id) updateIndiceButton();
+        });
+      }).catch(function(e){
+        console.error(e);
+        pdfState[book.id] = {error: 'No pudimos abrir este PDF para lectura. Probá subirlo de nuevo o con otro archivo.'};
+      });
+    })();
+    return pdfLoadPromises[book.id];
+  }
+
+  function renderReaderView(bookId){
+    showView('reader');
+    if (!booksLoaded){ setReaderLoading('Cargando…'); return; }
+    var book = books.filter(function(b){ return b.id===bookId; })[0];
+    if (!book){ setReaderError('No encontramos ese libro. Puede que lo hayas borrado.'); return; }
+
+    $('reader-title').textContent = book.title;
+    var badge = $('reader-type-badge');
+    badge.textContent = typeLabel(book.type);
+    badge.className = 'badge badge-' + (book.type || 'otro');
+
+    var partBadge = $('reader-part-badge');
+    if (book.groupId){
+      var siblingParts = books.filter(function(b){ return b.groupId===book.groupId; });
+      partBadge.hidden = false;
+      partBadge.textContent = 'Parte ' + book.partIndex + ' de ' + (book.partTotal || siblingParts.length);
+    } else {
+      partBadge.hidden = true;
+    }
+
+    var bookChanged = currentBookId !== bookId;
+    if (bookChanged && listenActive && !autoSpeakArmed) stopListening();
+    currentBookId = bookId;
+    var targetPage = currentPage;
+    var jumpToLast = false;
+    if (pendingJumpPage != null){
+      if (pendingJumpPage === 'last') jumpToLast = true;
+      else targetPage = pendingJumpPage;
+      pendingJumpPage = null;
+    } else if (bookChanged){ targetPage = book.lastPage || 1; }
+
+    if (bookChanged){ setReaderLoading('Abriendo el PDF…'); }
+    if (bookChanged && book.groupId){
+      db.collection('groups').doc(book.groupId).update({lastPartIndex: book.partIndex}).catch(function(){});
+    }
+
+    ensurePdfLoaded(book).then(function(){
+      if (currentRoute() !== 'libro-' + bookId) return; // navigated away meanwhile
+      var state = pdfState[bookId];
+      if (!state) { setReaderLoading('Abriendo el PDF…'); return; }
+      if (state.error){ setReaderError(state.error); return; }
+      $('reader-loading').hidden = true;
+      $('reader-error').hidden = true;
+      $('reader-text').hidden = false;
+      $('reader-nav').hidden = false;
+      $('reader-total-pages').textContent = state.numPages;
+      updateIndiceButton();
+      if (jumpToLast) targetPage = state.numPages;
+      showPage(bookId, targetPage);
+    });
+  }
+
+  function getSiblingPart(bookId, direction){
+    var book = books.filter(function(b){ return b.id===bookId; })[0];
+    if (!book || !book.groupId) return null;
+    var parts = books.filter(function(b){ return b.groupId===book.groupId; }).sort(function(a,b){ return a.partIndex-b.partIndex; });
+    var idx = -1;
+    parts.forEach(function(p,i){ if (p.id===bookId) idx = i; });
+    if (idx === -1) return null;
+    var targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= parts.length) return null;
+    return parts[targetIdx];
+  }
+
+  function goPrevPage(){
+    if (currentPage > 1){ showPage(currentBookId, currentPage-1); return; }
+    var sibling = getSiblingPart(currentBookId, -1);
+    if (sibling){ pendingJumpPage = 'last'; location.hash = 'libro-' + sibling.id; }
+  }
+  function goNextPage(){
+    var state = pdfState[currentBookId];
+    if (state && currentPage < state.numPages){ showPage(currentBookId, currentPage+1); return; }
+    var sibling = getSiblingPart(currentBookId, 1);
+    if (sibling){ pendingJumpPage = 1; location.hash = 'libro-' + sibling.id; }
+  }
+
+  // ---------- table of contents (PDF outline) ----------
+  function updateIndiceButton(){
+    var state = pdfState[currentBookId];
+    var has = !!(state && state.outline && state.outline.length);
+    $('btn-toc').hidden = !has;
+    var book = books.filter(function(b){ return b.id===currentBookId; })[0];
+    var bibleBooks = book ? getBibleBookList(book) : [];
+    $('btn-cite').hidden = !(book && book.type==='biblia' && bibleBooks.length >= 2);
+  }
+
+  // ---------- Bible book/chapter/verse navigation ----------
+  function fontSizeOf(item){ return Math.hypot(item.transform[2], item.transform[3]); }
+
+  function getBibleBookList(book){
+    var state = pdfState[book.id];
+    if (!state || !state.outline || !state.outline.length) return [];
+    var flat = state.outline.slice().sort(function(a,b){ return (a.page||0)-(b.page||0); });
+    var list = [];
+    flat.forEach(function(it, i){
+      if (it.page == null) return;
+      if (/^--.*--$/.test(it.title.trim())) return;
+      var next = flat[i+1];
+      var endPage = next ? Math.max(it.page, next.page - 1) : state.numPages;
+      list.push({title: it.title.trim(), startPage: it.page, endPage: endPage});
+    });
+    return list;
+  }
+
+  function buildVerseIndex(book, entry){
+    var cacheKey = book.id + '|' + entry.title;
+    if (verseIndexCache[cacheKey]) return verseIndexCache[cacheKey];
+    var state = pdfState[book.id];
+    var buffered = [];
+    function sleep0(){ return new Promise(function(r){ setTimeout(r, 0); }); }
+    function loadPage(p){
+      if (p > entry.endPage) return Promise.resolve();
+      return state.pdfDoc.getPage(p).then(function(page){ return page.getTextContent(); }).then(function(tc){
+        tc.items.forEach(function(it){
+          buffered.push({str: it.str, size: fontSizeOf(it), font: it.fontName, hasEOL: it.hasEOL, page: p});
+        });
+        return (p % 15 === 0) ? sleep0().then(function(){ return loadPage(p+1); }) : loadPage(p+1);
+      });
+    }
+    var promise = loadPage(entry.startPage).then(function(){
+      var sigCounts = {};
+      buffered.forEach(function(it){
+        var s = it.str.trim();
+        if (/^\d{1,3}$/.test(s)){
+          var key = (Math.round(it.size*10)/10) + '|' + it.font;
+          sigCounts[key] = (sigCounts[key]||0) + 1;
+        }
+      });
+      var bestKey = null, bestCount = 0;
+      Object.keys(sigCounts).forEach(function(k){ if (sigCounts[k] > bestCount){ bestCount = sigCounts[k]; bestKey = k; } });
+      var chapters = {};
+      if (bestKey){
+        var parts = bestKey.split('|');
+        var sigSize = parseFloat(parts[0]), sigFont = parts[1];
+        var currentChapter = 1, currentVerse = 0, seenAny = false, acc = '', accPage = null;
+        function flush(){
+          if (currentVerse > 0){
+            if (!chapters[currentChapter]) chapters[currentChapter] = {startPage: accPage, verses: {}};
+            chapters[currentChapter].verses[currentVerse] = {page: accPage, text: acc.replace(/\s+/g,' ').trim()};
+          }
+        }
+        buffered.forEach(function(it){
+          var s = it.str.trim();
+          var isMarker = false;
+          if (/^\d{1,3}$/.test(s) && it.font === sigFont){
+            var r = it.size / sigSize;
+            if (r > 0.85 && r < 1.15) isMarker = true;
+          }
+          if (isMarker){
+            flush();
+            var v = parseInt(s, 10);
+            if (seenAny && v === 1) currentChapter++;
+            seenAny = true;
+            currentVerse = v;
+            accPage = it.page;
+            acc = '';
+          } else {
+            acc += it.str + (it.hasEOL ? '\n' : ' ');
+          }
+        });
+        flush();
+      }
+      return {chapters: chapters};
+    }).catch(function(e){ console.error(e); return {chapters: {}}; });
+    verseIndexCache[cacheKey] = promise;
+    return promise;
+  }
+
+  function openCiteModal(){
+    var book = books.filter(function(b){ return b.id===currentBookId; })[0];
+    if (!book) return;
+    var list = getBibleBookList(book);
+    var sel = $('cite-book'); sel.innerHTML = '';
+    list.forEach(function(entry){
+      var o = document.createElement('option'); o.value = entry.title; o.textContent = entry.title; sel.appendChild(o);
+    });
+    $('cite-chapter').value = ''; $('cite-verse-from').value = ''; $('cite-verse-to').value = '';
+    $('cite-status').textContent = '';
+    $('modal-cite').hidden = false;
+  }
+
+  $('btn-cite').addEventListener('click', openCiteModal);
+  $('btn-cancel-cite').addEventListener('click', function(){ $('modal-cite').hidden = true; });
+  $('btn-run-cite').addEventListener('click', function(){
+    var book = books.filter(function(b){ return b.id===currentBookId; })[0];
+    if (!book) return;
+    var list = getBibleBookList(book);
+    var title = $('cite-book').value;
+    var entry = list.filter(function(e){ return e.title===title; })[0];
+    if (!entry){ $('cite-status').textContent = 'Elegí un libro.'; return; }
+    var chapterNum = parseInt($('cite-chapter').value, 10);
+    if (!chapterNum){ $('cite-status').textContent = 'Ingresá un capítulo.'; return; }
+    var vFrom = parseInt($('cite-verse-from').value, 10);
+    var vTo = parseInt($('cite-verse-to').value, 10);
+    if (!vFrom) vFrom = null;
+    if (!vTo) vTo = vFrom;
+
+    $('cite-status').textContent = 'Buscando…';
+    buildVerseIndex(book, entry).then(function(index){
+      var chapter = index.chapters[chapterNum];
+      if (!chapter){
+        $('cite-status').textContent = 'No encontramos ese capítulo en ' + entry.title + '.';
+        return;
+      }
+      var targetPage, combinedText = '', spansPages = false;
+      if (vFrom == null){
+        targetPage = chapter.startPage;
+      } else {
+        var firstPage = null, texts = [];
+        for (var v = vFrom; v <= vTo; v++){
+          var vd = chapter.verses[v];
+          if (!vd) continue;
+          if (firstPage == null) firstPage = vd.page;
+          if (vd.page === firstPage) texts.push(vd.text);
+          else spansPages = true;
+        }
+        if (firstPage == null){
+          $('cite-status').textContent = 'No encontramos esos versículos en ese capítulo.';
+          return;
+        }
+        targetPage = firstPage;
+        combinedText = texts.join(' ');
+      }
+      $('modal-cite').hidden = true;
+      if (combinedText) transientHighlight = {bookId: book.id, page: targetPage, text: combinedText};
+      jumpToBookPage(book.id, targetPage);
+      if (spansPages) showToast('El pasaje continúa en la página siguiente.');
+    });
+  });
+  function resolveDestPage(pdfDoc, dest){
+    var explicitDestPromise = (typeof dest === 'string') ? pdfDoc.getDestination(dest) : Promise.resolve(dest);
+    return explicitDestPromise.then(function(explicitDest){
+      if (!explicitDest || !explicitDest.length) return null;
+      return pdfDoc.getPageIndex(explicitDest[0]).then(function(idx){ return idx + 1; });
+    }).catch(function(){ return null; });
+  }
+  function resolveOutlineItems(pdfDoc, items){
+    return Promise.all(items.map(function(it){
+      return resolveDestPage(pdfDoc, it.dest).then(function(page){
+        var childrenPromise = (it.items && it.items.length) ? resolveOutlineItems(pdfDoc, it.items) : Promise.resolve([]);
+        return childrenPromise.then(function(children){
+          return {title: it.title, page: page, children: children};
+        });
+      });
+    }));
+  }
+  function loadOutline(pdfDoc){
+    return pdfDoc.getOutline().then(function(raw){
+      if (!raw || !raw.length) return null;
+      return resolveOutlineItems(pdfDoc, raw);
+    }).catch(function(e){ console.error(e); return null; });
+  }
+  function renderTocList(items, container, depth){
+    items.forEach(function(it){
+      if (it.page != null){
+        var btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'toc-item';
+        btn.style.paddingLeft = (0.9 + depth*1.1) + 'rem';
+        btn.textContent = it.title;
+        btn.addEventListener('click', function(){ $('modal-toc').hidden = true; showPage(currentBookId, it.page); });
+        container.appendChild(btn);
+      } else {
+        var label = document.createElement('div');
+        label.className = 'toc-label';
+        label.style.paddingLeft = (0.9 + depth*1.1) + 'rem';
+        label.textContent = it.title;
+        container.appendChild(label);
+      }
+      if (it.children && it.children.length) renderTocList(it.children, container, depth+1);
+    });
+  }
+  $('btn-toc').addEventListener('click', function(){
+    var state = pdfState[currentBookId];
+    if (!state || !state.outline) return;
+    var list = $('toc-list'); list.innerHTML = '';
+    renderTocList(state.outline, list, 0);
+    $('modal-toc').hidden = false;
+  });
+  $('btn-close-toc').addEventListener('click', function(){ $('modal-toc').hidden = true; });
+
+  // ---------- search ----------
+  var searchState = {cancelled:false, running:false};
+  function normalizeForSearch(s){
+    return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  }
+  function openSearchModal(preselectBookId){
+    var sel = $('search-scope');
+    sel.innerHTML = '';
+    var optAll = document.createElement('option'); optAll.value=''; optAll.textContent='Todos los libros'; sel.appendChild(optAll);
+    books.forEach(function(b){ var o=document.createElement('option'); o.value=b.id; o.textContent=b.title; sel.appendChild(o); });
+    sel.value = preselectBookId || '';
+    $('input-search-query').value = '';
+    $('search-results').innerHTML = '';
+    $('search-progress').textContent = '';
+    $('modal-search').hidden = false;
+    $('input-search-query').focus();
+  }
+  $('btn-search-library').addEventListener('click', function(){ openSearchModal(null); });
+  $('input-filter-library').addEventListener('input', function(){ renderBibliotecaView(); });
+  $('btn-search-book').addEventListener('click', function(){ openSearchModal(currentBookId); });
+  $('btn-edit-book-reader').addEventListener('click', function(){
+    var book = books.filter(function(b){ return b.id===currentBookId; })[0];
+    if (!book) return;
+    if (book.groupId){
+      var parts = books.filter(function(b){ return b.groupId===book.groupId; }).sort(function(a,b){ return a.partIndex-b.partIndex; });
+      var group = groups.filter(function(g){ return g.id===book.groupId; })[0] || {id: book.groupId, title: book.title};
+      openEditBookModal({kind:'group', group:group, parts:parts});
+    } else {
+      openEditBookModal({kind:'single', book:book});
+    }
+  });
+  $('btn-pin-page').addEventListener('click', function(){
+    if (!currentBookId || !db) return;
+    db.collection('books').doc(currentBookId).update({pinnedPage: currentPage}).then(function(){
+      showToast('Marcador guardado en la página ' + currentPage + '.');
+    }).catch(function(e){ console.error(e); showToast('No se pudo guardar el marcador.', 'error'); });
+  });
+
+  // ---------- escuchar (text-to-speech) ----------
+  var listenActive = false, autoSpeakArmed = false, spanishVoice = null;
+  function pickSpanishVoice(){
+    if (spanishVoice !== null) return spanishVoice;
+    try{
+      var voices = window.speechSynthesis.getVoices() || [];
+      spanishVoice = voices.filter(function(v){ return /^es/i.test(v.lang); })[0] || false;
+    } catch(e){ spanishVoice = false; }
+    return spanishVoice;
+  }
+  if (window.speechSynthesis){
+    window.speechSynthesis.onvoiceschanged = function(){ spanishVoice = null; };
+  }
+  function updateListenStatus(){
+    var state = pdfState[currentBookId];
+    $('listen-status').textContent = '🔊 Escuchando — pág. ' + currentPage + (state ? (' de ' + state.numPages) : '');
+  }
+  function speakPageText(text){
+    if (!listenActive) return;
+    window.speechSynthesis.cancel();
+    text = (text||'').trim();
+    if (!text || text.indexOf('no tiene texto seleccionable') !== -1 || text.indexOf('No pudimos leer esta página') !== -1 || text === 'Cargando página…'){
+      advanceAndSpeak();
+      return;
+    }
+    var utter = new SpeechSynthesisUtterance(text);
+    var voice = pickSpanishVoice();
+    if (voice){ utter.voice = voice; utter.lang = voice.lang; } else { utter.lang = 'es-ES'; }
+    utter.onend = function(){ if (listenActive) advanceAndSpeak(); };
+    utter.onerror = function(){ if (listenActive) advanceAndSpeak(); };
+    updateListenStatus();
+    window.speechSynthesis.speak(utter);
+  }
+  function advanceAndSpeak(){
+    if (!listenActive) return;
+    var state = pdfState[currentBookId];
+    var atEnd = state && currentPage >= state.numPages;
+    if (atEnd && !getSiblingPart(currentBookId, 1)){
+      stopListening();
+      showToast('Terminaste la lectura. 🎉');
+      return;
+    }
+    autoSpeakArmed = true;
+    goNextPage();
+  }
+  function startListening(){
+    if (!('speechSynthesis' in window)){
+      showToast('Tu navegador no permite leer en voz alta.', 'error');
+      return;
+    }
+    var state = pdfState[currentBookId];
+    if (state && state.outline && state.outline.length){
+      var sorted = state.outline.slice().sort(function(a,b){ return (a.page||0)-(b.page||0); });
+      var firstReal = sorted.filter(function(it){ return it.page!=null && !/^--.*--$/.test(it.title.trim()); })[0];
+      if (firstReal && currentPage < firstReal.page){
+        listenActive = true;
+        autoSpeakArmed = true;
+        $('listen-bar').hidden = false;
+        updateListenStatus();
+        showToast('Arrancamos en "' + firstReal.title + '" — salteamos portada/índice.');
+        showPage(currentBookId, firstReal.page);
+        return;
+      }
+    }
+    listenActive = true;
+    $('listen-bar').hidden = false;
+    updateListenStatus();
+    speakPageText($('reader-text').textContent);
+  }
+  function stopListening(){
+    listenActive = false;
+    autoSpeakArmed = false;
+    try{ window.speechSynthesis.cancel(); }catch(e){}
+    $('listen-bar').hidden = true;
+  }
+  $('btn-listen').addEventListener('click', startListening);
+  $('btn-listen-stop').addEventListener('click', stopListening);
+  $('btn-close-search').addEventListener('click', function(){ searchState.cancelled = true; $('modal-search').hidden = true; });
+  $('input-search-query').addEventListener('keydown', function(e){
+    if (e.key==='Enter'){ e.preventDefault(); if (!searchState.running) runSearch(); }
+  });
+  $('btn-run-search').addEventListener('click', function(){
+    if (searchState.running){ searchState.cancelled = true; return; }
+    runSearch();
+  });
+
+  function appendSearchResults(book, hits){
+    var list = $('search-results');
+    var group = document.createElement('div'); group.className = 'search-group';
+    var h = document.createElement('h3'); h.className = 'search-group-title';
+    h.textContent = book.title + ' (' + hits.length + (hits.length===1 ? ' resultado' : ' resultados') + ')';
+    group.appendChild(h);
+    hits.slice(0,50).forEach(function(hit){
+      var item = document.createElement('button');
+      item.type = 'button'; item.className = 'search-hit-item';
+      var pageTag = document.createElement('span'); pageTag.className = 'search-hit-page'; pageTag.textContent = 'pág. ' + hit.page;
+      var snippetEl = document.createElement('span'); snippetEl.className = 'search-hit-snippet'; snippetEl.textContent = hit.snippet;
+      item.appendChild(pageTag); item.appendChild(snippetEl);
+      item.addEventListener('click', function(){
+        searchState.cancelled = true;
+        $('modal-search').hidden = true;
+        jumpToBookPage(book.id, hit.page);
+      });
+      group.appendChild(item);
+    });
+    if (hits.length > 50){
+      var more = document.createElement('div'); more.className = 'search-hit-more';
+      more.textContent = '+ ' + (hits.length-50) + ' resultados más en este libro';
+      group.appendChild(more);
+    }
+    list.appendChild(group);
+  }
+
+  function runSearch(){
+    var query = $('input-search-query').value.trim();
+    if (!query) return;
+    var scope = $('search-scope').value;
+    var targets = scope ? books.filter(function(b){ return b.id===scope; }) : books.slice();
+    if (!targets.length){ $('search-progress').textContent = 'No hay libros para buscar.'; return; }
+    searchState.cancelled = false;
+    searchState.running = true;
+    $('search-results').innerHTML = '';
+    $('btn-run-search').textContent = 'Cancelar';
+    var nq = normalizeForSearch(query);
+    var totalHits = 0;
+
+    function sleep0(){ return new Promise(function(r){ setTimeout(r, 0); }); }
+
+    function processBook(bi){
+      if (bi >= targets.length || searchState.cancelled) return Promise.resolve();
+      var book = targets[bi];
+      $('search-progress').textContent = 'Abriendo "' + book.title + '"…';
+      return ensurePdfLoaded(book).then(function(){
+        var state = pdfState[book.id];
+        if (!state || state.error) return;
+        var hitsForBook = [];
+        function processPage(p){
+          if (p > state.numPages || searchState.cancelled) return Promise.resolve();
+          $('search-progress').textContent = 'Indexando "' + book.title + '"… ' + p + '/' + state.numPages;
+          var text = state.textCache[p];
+          var textPromise;
+          if (text === undefined){
+            textPromise = state.pdfDoc.getPage(p).then(function(page){ return page.getTextContent(); }).then(function(tc){
+              var t = tc.items.map(function(it){ return it.str + (it.hasEOL?'\n':''); }).join('');
+              t = t.replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+              state.textCache[p] = t;
+              return t;
+            }).catch(function(){ return ''; });
+          } else {
+            textPromise = Promise.resolve(text);
+          }
+          return textPromise.then(function(t){
+            if (t){
+              var nt = normalizeForSearch(t);
+              var idx = nt.indexOf(nq);
+              if (idx !== -1){
+                var snippetStart = Math.max(0, idx-50);
+                var snippet = (snippetStart>0?'…':'') + t.slice(snippetStart, idx+nq.length+60) + '…';
+                hitsForBook.push({page:p, snippet:snippet});
+                totalHits++;
+              }
+            }
+            return (p % 15 === 0) ? sleep0().then(function(){ return processPage(p+1); }) : processPage(p+1);
+          });
+        }
+        return processPage(1).then(function(){
+          if (hitsForBook.length) appendSearchResults(book, hitsForBook);
+        });
+      }).then(function(){ return processBook(bi+1); });
+    }
+
+    processBook(0).then(function(){
+      $('search-progress').textContent = searchState.cancelled
+        ? 'Búsqueda cancelada.'
+        : (totalHits ? (totalHits + (totalHits===1?' resultado.':' resultados.')) : 'No se encontró nada con esas palabras.');
+      $('btn-run-search').textContent = 'Buscar';
+      searchState.running = false;
+    });
+  }
+
+  function showPage(bookId, pageNum){
+    var state = pdfState[bookId];
+    if (!state || !state.pdfDoc) return;
+    pageNum = Math.max(1, Math.min(state.numPages, pageNum));
+    currentPage = pageNum;
+    var myToken = ++showPageToken;
+    $('input-page-jump').value = pageNum;
+    $('btn-prev-page').disabled = pageNum<=1 && !getSiblingPart(bookId, -1);
+    $('btn-next-page').disabled = pageNum>=state.numPages && !getSiblingPart(bookId, 1);
+
+    var container = $('reader-text');
+    var cached = state.textCache[pageNum];
+    var ready = function(text){
+      if (myToken !== showPageToken) return;
+      if (currentRoute() !== 'libro-' + bookId) return;
+      var pageHighlights = highlights.filter(function(h){ return h.bookId===bookId && h.page===pageNum; });
+      if (transientHighlight && transientHighlight.bookId===bookId && transientHighlight.page===pageNum){
+        pageHighlights = pageHighlights.concat([{text: transientHighlight.text, tag: 'cita'}]);
+        transientHighlight = null;
+      }
+      renderPageWithHighlights(container, text, pageHighlights);
+      scheduleLastPageUpdate(bookId, pageNum);
+      if (autoSpeakArmed){ autoSpeakArmed = false; speakPageText(text); }
+    };
+    if (cached !== undefined){ ready(cached); return; }
+    container.textContent = 'Cargando página…';
+    state.pdfDoc.getPage(pageNum).then(function(page){ return page.getTextContent(); }).then(function(tc){
+      var text = tc.items.map(function(it){ return it.str + (it.hasEOL ? '\n' : ''); }).join('');
+      text = text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+      if (!text) text = '(Esta página no tiene texto seleccionable — puede ser una imagen escaneada.)';
+      state.textCache[pageNum] = text;
+      ready(text);
+    }).catch(function(e){
+      console.error(e);
+      if (myToken === showPageToken) container.textContent = 'No pudimos leer esta página.';
+    });
+  }
+
+  function renderPageWithHighlights(container, text, pageHighlights){
+    container.textContent = '';
+    if (!pageHighlights.length){ container.textContent = text; return; }
+    var matches = [];
+    pageHighlights.forEach(function(h){
+      var idx = text.indexOf(h.text);
+      if (idx !== -1) matches.push({start: idx, end: idx + h.text.length, h: h});
+    });
+    matches.sort(function(a,b){ return a.start - b.start; });
+    var filtered = []; var lastEnd = -1;
+    matches.forEach(function(m){ if (m.start >= lastEnd){ filtered.push(m); lastEnd = m.end; } });
+    var cursor = 0;
+    filtered.forEach(function(m){
+      if (m.start > cursor) container.appendChild(document.createTextNode(text.slice(cursor, m.start)));
+      var mk = document.createElement('mark');
+      mk.className = 'hl' + (m.h.tag ? ' hl-' + m.h.tag : '');
+      mk.textContent = text.slice(m.start, m.end);
+      if (m.h.id){
+        mk.title = 'Ver en el cuaderno';
+        mk.addEventListener('click', function(){ location.hash = 'cuaderno'; });
+      }
+      container.appendChild(mk);
+      cursor = m.end;
+    });
+    if (cursor < text.length) container.appendChild(document.createTextNode(text.slice(cursor)));
+  }
+
+  var lastPageTimer = null;
+  function scheduleLastPageUpdate(bookId, pageNum){
+    clearTimeout(lastPageTimer);
+    lastPageTimer = setTimeout(function(){
+      var book = books.filter(function(b){ return b.id===bookId; })[0];
+      if (book && book.lastPage !== pageNum){
+        db.collection('books').doc(bookId).update({lastPage: pageNum}).catch(function(){});
+      }
+    }, 600);
+  }
+
+  $('btn-prev-page').addEventListener('click', goPrevPage);
+  $('btn-next-page').addEventListener('click', goNextPage);
+  $('input-page-jump').addEventListener('change', function(e){
+    var n = parseInt(e.target.value, 10);
+    if (!isNaN(n)) showPage(currentBookId, n);
+  });
+  document.addEventListener('keydown', function(e){
+    if (currentRoute().indexOf('libro-')!==0) return;
+    var tag = e.target && e.target.tagName;
+    if (tag==='INPUT' || tag==='TEXTAREA') return;
+    if (e.key==='ArrowLeft') goPrevPage();
+    if (e.key==='ArrowRight') goNextPage();
+  });
+
+  // ---------- selection -> highlight toolbar ----------
+  function hideSelectionToolbar(){ $('selection-toolbar').hidden = true; pendingSelection = null; }
+  function handleSelectionCheck(){
+    var sel = window.getSelection();
+    var text = sel && sel.toString().trim();
+    var container = $('reader-text');
+    if (!text || !sel.rangeCount || container.hidden || !container.contains(sel.anchorNode)){ hideSelectionToolbar(); return; }
+    var range = sel.getRangeAt(0);
+    var rect = range.getBoundingClientRect();
+    if (rect.width===0 && rect.height===0){ hideSelectionToolbar(); return; }
+    pendingSelection = {text: text, page: currentPage, bookId: currentBookId};
+    var toolbar = $('selection-toolbar');
+    toolbar.hidden = false;
+    var top = window.scrollY + rect.top - toolbar.offsetHeight - 10;
+    var left = window.scrollX + rect.left;
+    var maxLeft = window.scrollX + document.documentElement.clientWidth - toolbar.offsetWidth - 8;
+    left = Math.max(8, Math.min(left, maxLeft));
+    toolbar.style.top = Math.max(8, top) + 'px';
+    toolbar.style.left = left + 'px';
+  }
+  document.addEventListener('mouseup', function(){ setTimeout(handleSelectionCheck, 0); });
+  document.addEventListener('touchend', function(){ setTimeout(handleSelectionCheck, 80); });
+
+  $('selection-toolbar').addEventListener('click', function(e){
+    var btn = e.target.closest ? e.target.closest('.sel-btn') : null;
+    if (!btn || !pendingSelection) return;
+    var action = btn.dataset.action;
+    var sel = pendingSelection;
+    if (action==='mark'){
+      saveHighlight(sel).then(function(){
+        hideSelectionToolbar(); window.getSelection().removeAllRanges();
+        showToast('Marcado. Lo tenés en tu Cuaderno.');
+      });
+    } else if (action==='note'){
+      openNoteComposer(sel, null);
+    } else if (action==='ai'){
+      requestAiForSelection(sel, btn);
+    }
+  });
+
+  function saveHighlight(data){
+    if (!db) return Promise.reject();
+    var book = books.filter(function(b){ return b.id===data.bookId; })[0];
+    var id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random().toString(16).slice(2));
+    var doc = {
+      bookId: data.bookId, bookTitle: book ? book.title : '', page: data.page,
+      text: data.text, tag: data.tag || null, note: data.note || null,
+      aiSummary: data.aiSummary || null, createdAt: Date.now()
+    };
+    return db.collection('highlights').doc(id).set(doc).then(function(){ return id; });
+  }
+
+  function buildSummaryPrompt(passage, bookTitle){
+    return 'Sos un guía de estudio bíblico católico, cálido y claro. Una persona subrayó este pasaje ' +
+      'porque le pareció importante, del libro "' + bookTitle + '".\n\n' +
+      'Escribí, en español (tono argentino, de "vos"), un resumen breve de 2 a 4 oraciones: la idea ' +
+      'central del pasaje y por qué puede ser relevante para la vida espiritual, sin inventar citas ni ' +
+      'afirmaciones doctrinales que no estén en el texto.\n\nPasaje:\n"""' + passage + '"""\n\n' +
+      'Respondé solo con el resumen, sin introducciones ni encabezados.';
+  }
+  function sampleErrorMessage(e){
+    var map = {
+      not_granted: 'No diste permiso para usar la IA en esta página.',
+      rate_limited: 'Estás pidiendo demasiados resúmenes seguidos. Probá en un rato.',
+      prompt_too_large: 'El pasaje es demasiado largo para resumir de una.',
+      refused: 'La IA no pudo generar un resumen para este contenido.',
+      empty_completion: 'No se generó ningún resumen. Probá de nuevo.'
+    };
+    return (e && map[e.code]) || 'No se pudo generar el resumen. Probá de nuevo.';
+  }
+  function requestAiForSelection(sel, btn){
+    if (!sampleFn){ showToast('El resumen con IA no está disponible acá.', 'error'); return; }
+    var book = books.filter(function(b){ return b.id===sel.bookId; })[0];
+    btn.disabled = true; var orig = btn.textContent; btn.textContent = 'Pensando…';
+    sampleFn(buildSummaryPrompt(sel.text, book ? book.title : '')).then(function(result){
+      return saveHighlight({text: sel.text, page: sel.page, bookId: sel.bookId, aiSummary: result.text});
+    }).then(function(){
+      hideSelectionToolbar(); window.getSelection().removeAllRanges();
+      showToast('Resumen guardado en tu Cuaderno.');
+    }).catch(function(e){
+      console.error(e); showToast(sampleErrorMessage(e), 'error');
+    }).finally(function(){ btn.disabled = false; btn.textContent = orig; });
+  }
+  function requestAiForExisting(h, btn){
+    if (!sampleFn){ showToast('El resumen con IA no está disponible acá.', 'error'); return; }
+    btn.disabled = true; var orig = btn.textContent; btn.textContent = 'Pensando…';
+    sampleFn(buildSummaryPrompt(h.text, h.bookTitle)).then(function(result){
+      return db.collection('highlights').doc(h.id).update({aiSummary: result.text});
+    }).then(function(){ showToast('Resumen agregado.'); })
+    .catch(function(e){ console.error(e); showToast(sampleErrorMessage(e), 'error'); })
+    .finally(function(){ btn.disabled = false; btn.textContent = orig; });
+  }
+
+  // ---------- note modal ----------
+  function openNoteComposer(sel, existingHighlightId){
+    var preview = $('note-passage-preview'), textarea = $('input-note-text');
+    if (existingHighlightId){
+      var h = highlights.filter(function(x){ return x.id===existingHighlightId; })[0];
+      if (!h) return;
+      noteContext = {mode:'edit', id: existingHighlightId};
+      preview.textContent = h.text; textarea.value = h.note || '';
+    } else {
+      noteContext = {mode:'new', sel: sel};
+      preview.textContent = sel.text; textarea.value = '';
+    }
+    $('modal-note').hidden = false;
+    textarea.focus();
+  }
+  $('btn-cancel-note').addEventListener('click', function(){ $('modal-note').hidden = true; noteContext = null; });
+  $('btn-save-note').addEventListener('click', function(){
+    var text = $('input-note-text').value.trim();
+    if (!noteContext) return;
+    var p;
+    if (noteContext.mode==='new'){
+      p = saveHighlight({text: noteContext.sel.text, page: noteContext.sel.page, bookId: noteContext.sel.bookId, note: text || null})
+        .then(function(){ hideSelectionToolbar(); window.getSelection().removeAllRanges(); });
+    } else {
+      p = db.collection('highlights').doc(noteContext.id).update({note: text || null});
+    }
+    p.then(function(){ $('modal-note').hidden = true; noteContext = null; showToast('Nota guardada.'); })
+     .catch(function(e){ console.error(e); showToast('No se pudo guardar la nota.', 'error'); });
+  });
+
+  // ---------- cuaderno ----------
+  function goToHighlightInBook(h){ jumpToBookPage(h.bookId, h.page); }
+
+  function populateFilterOptions(){
+    var sel = $('filter-book');
+    var prev = sel.value;
+    var seen = [];
+    var seenIds = {};
+    highlights.forEach(function(h){
+      if (h.bookId && !seenIds[h.bookId]){ seenIds[h.bookId]=true; seen.push({id:h.bookId, title:h.bookTitle}); }
+    });
+    sel.innerHTML = '';
+    var optAll = document.createElement('option'); optAll.value=''; optAll.textContent='Todos los libros';
+    sel.appendChild(optAll);
+    seen.forEach(function(s){
+      var o = document.createElement('option'); o.value = s.id; o.textContent = s.title;
+      sel.appendChild(o);
+    });
+    if (prev==='' || seenIds[prev]) sel.value = prev;
+  }
+  $('filter-book').addEventListener('change', renderCuadernoList);
+  $('btn-copy-all').addEventListener('click', function(e){
+    var items = currentCuadernoItems();
+    if (!items.length){ showToast('Todavía no tenés nada para copiar.'); return; }
+    var text = items.map(formatEntryText).join('\n\n---\n\n');
+    copyToClipboard(text, e.currentTarget);
+  });
+
+  function currentCuadernoItems(){
+    if (activeEventId){
+      return highlights.filter(function(h){ return h.eventId===activeEventId; });
+    }
+    var filter = $('filter-book').value;
+    return filter ? highlights.filter(function(h){ return h.bookId===filter; }) : highlights;
+  }
+
+  function renderCuadernoView(){
+    showView('cuaderno');
+    populateFilterOptions();
+    renderEventChips();
+    renderCuadernoList();
+  }
+
+  function renderEventChips(){
+    var wrap = $('event-chips');
+    wrap.innerHTML = '';
+    var todos = document.createElement('button');
+    todos.type = 'button'; todos.className = 'event-chip' + (activeEventId===null ? ' active' : '');
+    todos.textContent = 'Todos';
+    todos.addEventListener('click', function(){ activeEventId = null; renderCuadernoView(); });
+    wrap.appendChild(todos);
+
+    events.forEach(function(ev){
+      var chip = document.createElement('button');
+      chip.type = 'button'; chip.className = 'event-chip' + (activeEventId===ev.id ? ' active' : '');
+      chip.addEventListener('click', function(){ activeEventId = ev.id; renderCuadernoView(); });
+      var label = document.createElement('span'); label.textContent = ev.title;
+      var editBtn = document.createElement('span'); editBtn.className = 'event-chip-edit'; editBtn.textContent = '✏️';
+      editBtn.addEventListener('click', function(e){ e.stopPropagation(); openEventModal(ev); });
+      chip.appendChild(label); chip.appendChild(editBtn);
+      wrap.appendChild(chip);
+    });
+
+    var newBtn = document.createElement('button');
+    newBtn.type = 'button'; newBtn.className = 'event-chip-new'; newBtn.textContent = '+ Nuevo evento';
+    newBtn.addEventListener('click', function(){ openEventModal(null); });
+    wrap.appendChild(newBtn);
+  }
+
+  var eventModalContext = null;
+  function openEventModal(existing){
+    eventModalContext = existing;
+    $('event-modal-title').textContent = existing ? 'Editar evento' : 'Nuevo evento';
+    $('input-event-title').value = existing ? existing.title : '';
+    $('btn-delete-event').hidden = !existing;
+    $('modal-event').hidden = false;
+    $('input-event-title').focus();
+  }
+  $('btn-cancel-event').addEventListener('click', function(){ $('modal-event').hidden = true; eventModalContext = null; });
+  $('btn-save-event').addEventListener('click', function(){
+    var title = $('input-event-title').value.trim();
+    if (!title){ showToast('Ponele un nombre al evento.', 'error'); return; }
+    if (!db) return;
+    if (eventModalContext){
+      db.collection('events').doc(eventModalContext.id).update({title: title}).then(function(){
+        $('modal-event').hidden = true; eventModalContext = null; showToast('Evento actualizado.');
+      }).catch(function(e){ console.error(e); showToast('No se pudo guardar.', 'error'); });
+    } else {
+      var id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random().toString(16).slice(2));
+      db.collection('events').doc(id).set({id:id, title:title, createdAt:Date.now()}).then(function(){
+        $('modal-event').hidden = true; eventModalContext = null;
+        activeEventId = id;
+        renderCuadernoView();
+      }).catch(function(e){ console.error(e); showToast('No se pudo crear el evento.', 'error'); });
+    }
+  });
+  $('btn-delete-event').addEventListener('click', function(){
+    if (!eventModalContext) return;
+    var ev = eventModalContext;
+    var toUnset = highlights.filter(function(h){ return h.eventId===ev.id; });
+    Promise.all(toUnset.map(function(h){ return db.collection('highlights').doc(h.id).update({eventId:null}).catch(function(){}); }))
+      .then(function(){ return db.collection('events').doc(ev.id).delete(); })
+      .then(function(){
+        $('modal-event').hidden = true; eventModalContext = null;
+        if (activeEventId===ev.id) activeEventId = null;
+        renderCuadernoView();
+        showToast('Evento eliminado. Lo que tenías adentro quedó sin evento, no se borró.');
+      }).catch(function(e){ console.error(e); showToast('No se pudo eliminar el evento.', 'error'); });
+  });
+
+  $('btn-add-event-note').addEventListener('click', function(){
+    var text = $('input-event-note').value.trim();
+    if (!text || !activeEventId || !db) return;
+    var id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random().toString(16).slice(2));
+    db.collection('highlights').doc(id).set({
+      bookId:null, bookTitle:null, page:null, text:null, note:text,
+      tag:null, aiSummary:null, eventId:activeEventId, createdAt:Date.now()
+    }).then(function(){
+      $('input-event-note').value = '';
+      showToast('Agregado al cuaderno.');
+    }).catch(function(e){ console.error(e); showToast('No se pudo guardar.', 'error'); });
+  });
+
+  function renderCuadernoList(){
+    var list = $('cuaderno-list');
+    list.innerHTML = '';
+    $('event-composer').hidden = !activeEventId;
+    $('filter-book').style.display = activeEventId ? 'none' : '';
+    if (!highlightsLoaded || !eventsLoaded){ list.appendChild(loadingState('Cargando tu cuaderno…')); return; }
+    var items = currentCuadernoItems();
+    if (!items.length){
+      list.appendChild(activeEventId
+        ? emptyState('Todavía no hay nada acá', 'Escribí algo arriba, o pasá un pasaje marcado a este evento desde su tarjeta.')
+        : emptyState('Tu cuaderno está vacío', 'Marcá un pasaje mientras leés y va a aparecer acá, con tu nota o un resumen con IA si lo pedís.'));
+      return;
+    }
+    items.forEach(function(h){ list.appendChild(highlightCard(h)); });
+  }
+
+  function formatEntryText(h){
+    var out;
+    if (h.bookId){
+      out = '"' + h.text + '"\n— ' + h.bookTitle + ', pág. ' + h.page;
+      if (h.aiSummary) out += '\nResumen: ' + h.aiSummary;
+      if (h.note) out += '\nMi nota: ' + h.note;
+    } else {
+      out = h.note || '';
+    }
+    var ev = h.eventId ? events.filter(function(e){ return e.id===h.eventId; })[0] : null;
+    if (ev) out += '\n[' + ev.title + ']';
+    return out;
+  }
+  function copyToClipboard(text, btn){
+    var done = function(){
+      var orig = btn.textContent; btn.textContent = '¡Copiado!';
+      setTimeout(function(){ btn.textContent = orig; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done).catch(function(){ fallbackCopy(text, done); });
+    } else fallbackCopy(text, done);
+  }
+  function fallbackCopy(text, done){
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try{ document.execCommand('copy'); done(); }
+    catch(e){ showToast('No se pudo copiar. Seleccioná el texto manualmente.', 'error'); }
+    document.body.removeChild(ta);
+  }
+
+  function tagDots(h){
+    var wrap = document.createElement('div'); wrap.className = 'tag-dots';
+    TAGS.forEach(function(t){
+      var dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'tag-dot tag-dot-' + t.key + (h.tag===t.key ? ' active' : '');
+      dot.title = t.label;
+      dot.addEventListener('click', function(){
+        var newTag = h.tag===t.key ? null : t.key;
+        db.collection('highlights').doc(h.id).update({tag:newTag}).catch(function(){});
+      });
+      wrap.appendChild(dot);
+    });
+    return wrap;
+  }
+
+  function confirmDeleteHighlight(h, btn){
+    if (btn.dataset.confirming){
+      db.collection('highlights').doc(h.id).delete().then(function(){ showToast('Eliminado.'); })
+        .catch(function(e){ console.error(e); showToast('No se pudo eliminar.', 'error'); });
+      return;
+    }
+    btn.dataset.confirming = '1';
+    var orig = btn.textContent; btn.textContent = '¿Seguro?';
+    setTimeout(function(){ if (btn.dataset.confirming){ delete btn.dataset.confirming; btn.textContent = orig; } }, 3000);
+  }
+
+  function highlightCard(h){
+    var card = document.createElement('div'); card.className = 'entry-card';
+
+    var header = document.createElement('div'); header.className = 'entry-header';
+    if (!activeEventId && h.eventId){
+      var ev = events.filter(function(e){ return e.id===h.eventId; })[0];
+      if (ev){ var evTag = document.createElement('span'); evTag.className = 'entry-event-tag'; evTag.textContent = '📁 ' + ev.title; header.appendChild(evTag); }
+    }
+    if (h.bookId){
+      var bookLink = document.createElement('a'); bookLink.href = '#libro-' + h.bookId;
+      bookLink.className = 'entry-book-link'; bookLink.textContent = h.bookTitle || 'Libro';
+      bookLink.addEventListener('click', function(e){ e.preventDefault(); goToHighlightInBook(h); });
+      var pageSpan = document.createElement('span'); pageSpan.textContent = 'pág. ' + h.page;
+      header.appendChild(bookLink); header.appendChild(pageSpan);
+    }
+    var dateSpan = document.createElement('span'); dateSpan.textContent = formatDate(h.createdAt);
+    header.appendChild(dateSpan);
+    card.appendChild(header);
+
+    if (h.bookId){
+      var quote = document.createElement('blockquote'); quote.className = 'entry-quote'; quote.textContent = h.text;
+      card.appendChild(quote);
+    }
+    card.appendChild(tagDots(h));
+
+    if (h.aiSummary){
+      var sBlock = document.createElement('div'); sBlock.className = 'entry-ai';
+      var sLabel = document.createElement('div'); sLabel.className = 'entry-block-label'; sLabel.textContent = '✨ Resumen';
+      var sText = document.createElement('p'); sText.textContent = h.aiSummary;
+      sBlock.appendChild(sLabel); sBlock.appendChild(sText); card.appendChild(sBlock);
+    }
+    if (h.note){
+      var nBlock = document.createElement('div'); nBlock.className = 'entry-note';
+      var nLabel = document.createElement('div'); nLabel.className = 'entry-block-label'; nLabel.textContent = '📝 Mi nota';
+      var nText = document.createElement('p'); nText.textContent = h.note;
+      var editBtn = document.createElement('button'); editBtn.className = 'link-btn'; editBtn.type='button'; editBtn.textContent = 'Editar';
+      editBtn.addEventListener('click', function(){ openNoteComposer(null, h.id); });
+      nBlock.appendChild(nLabel); nBlock.appendChild(nText); nBlock.appendChild(editBtn);
+      card.appendChild(nBlock);
+    }
+
+    var actions = document.createElement('div'); actions.className = 'entry-actions';
+    if (!h.note){
+      var addNoteBtn = document.createElement('button'); addNoteBtn.className = 'btn btn-ghost btn-sm'; addNoteBtn.type='button'; addNoteBtn.textContent = '+ Nota';
+      addNoteBtn.addEventListener('click', function(){ openNoteComposer(null, h.id); });
+      actions.appendChild(addNoteBtn);
+    }
+    if (h.bookId && !h.aiSummary){
+      var addAiBtn = document.createElement('button'); addAiBtn.className = 'btn btn-ghost btn-sm'; addAiBtn.type='button'; addAiBtn.textContent = '✨ Resumen IA'; addAiBtn.hidden = true;
+      addAiBtn.addEventListener('click', function(){ requestAiForExisting(h, addAiBtn); });
+      actions.appendChild(addAiBtn);
+    }
+    if (events.length){
+      var moveSel = document.createElement('select'); moveSel.className = 'entry-move-select';
+      var optNone = document.createElement('option'); optNone.value=''; optNone.textContent='Sin evento'; moveSel.appendChild(optNone);
+      events.forEach(function(ev){
+        var o = document.createElement('option'); o.value = ev.id; o.textContent = '📁 ' + ev.title;
+        if (h.eventId===ev.id) o.selected = true;
+        moveSel.appendChild(o);
+      });
+      moveSel.addEventListener('change', function(){
+        db.collection('highlights').doc(h.id).update({eventId: moveSel.value || null}).then(function(){
+          showToast(moveSel.value ? 'Movido al evento.' : 'Quitado del evento.');
+        }).catch(function(e){ console.error(e); showToast('No se pudo mover.', 'error'); });
+      });
+      actions.appendChild(moveSel);
+    }
+    var copyBtn = document.createElement('button'); copyBtn.className = 'btn btn-ghost btn-sm'; copyBtn.type='button'; copyBtn.textContent = 'Copiar';
+    copyBtn.addEventListener('click', function(){ copyToClipboard(formatEntryText(h), copyBtn); });
+    var delBtn = document.createElement('button'); delBtn.className = 'btn btn-ghost btn-sm btn-danger'; delBtn.type='button'; delBtn.textContent = 'Eliminar';
+    delBtn.addEventListener('click', function(){ confirmDeleteHighlight(h, delBtn); });
+    actions.appendChild(copyBtn); actions.appendChild(delBtn);
+    card.appendChild(actions);
+    return card;
+  }
+
+  // ---------- data subscriptions ----------
+  function subscribeData(){
+    db.collection('books').orderBy('addedAt','desc').onSnapshot(function(snap){
+      books = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      booksLoaded = true;
+      renderRoute();
+    }, function(err){ console.error(err); booksLoaded = true; renderRoute(); });
+
+    db.collection('highlights').orderBy('createdAt','desc').onSnapshot(function(snap){
+      highlights = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      highlightsLoaded = true;
+      renderRoute();
+    }, function(err){ console.error(err); highlightsLoaded = true; renderRoute(); });
+
+    db.collection('groups').onSnapshot(function(snap){
+      groups = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      groupsLoaded = true;
+      renderRoute();
+    }, function(err){ console.error(err); groupsLoaded = true; renderRoute(); });
+
+    db.collection('events').orderBy('createdAt','asc').onSnapshot(function(snap){
+      events = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      eventsLoaded = true;
+      if (activeEventId && !events.some(function(ev){ return ev.id===activeEventId; })) activeEventId = null;
+      if (currentRoute()==='cuaderno') renderCuadernoView();
+    }, function(err){ console.error(err); eventsLoaded = true; });
+  }
+
+  // ---------- init ----------
+  var initDone = false;
+  renderRoute(); // show loading state immediately
+
+  Promise.all([
+    window.claude && window.claude.use ? window.claude.use('db') : Promise.resolve(null),
+    window.claude && window.claude.use ? window.claude.use('assets') : Promise.resolve(null),
+    window.claude && window.claude.use ? window.claude.use('sample') : Promise.resolve(null)
+  ]).then(function(results){
+    db = results[0]; assetsCap = results[1]; sampleFn = results[2];
+  }).catch(function(e){ console.error(e); })
+  .finally(function(){
+    initDone = true;
+    if (db) subscribeData();
+    else { booksLoaded = true; highlightsLoaded = true; }
+    renderRoute();
+  });
+})();
+</script>
+
+</body></html>

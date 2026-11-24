@@ -206,3 +206,12 @@ create policy grab_archivos_ver on storage.objects for select to authenticated u
 create policy grab_archivos_subir on storage.objects for insert to authenticated with check (bucket_id = 'grabaciones' and public.es_miembro(((storage.foldername(name))[1])::uuid));
 create policy grab_archivos_borrar on storage.objects for delete to authenticated using (bucket_id = 'grabaciones' and (owner_id = (select auth.uid())::text or public.es_admin(((storage.foldername(name))[1])::uuid)));
 alter table public.canciones add column if not exists colores jsonb not null default '{}'::jsonb;
+
+-- Lectio (lectura): libros compartidos por grupo, marcas y notas personales
+create table if not exists public.lectio_docs (
+  grupo_id uuid not null references public.grupos(id) on delete cascade,
+  coleccion text not null check (coleccion in ('books','groups','highlights','events')),
+  id text not null, owner uuid not null default auth.uid(), data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  primary key (grupo_id, coleccion, id));
+-- RLS: books/groups visibles para el grupo; highlights/events solo del dueño. Bucket privado 'lectio' (PDF, 50 MB).
