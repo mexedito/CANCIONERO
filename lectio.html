@@ -281,8 +281,13 @@ main{max-width:720px; margin:0 auto;}
 </main>
 
 <div id="selection-toolbar" class="selection-toolbar" hidden>
-  <button data-action="mark" class="sel-btn">🔖 Marcar</button>
-  <button data-action="note" class="sel-btn">📝 + nota</button>
+  <span class="sel-lbl">Pintar:</span>
+  <button data-action="paint" data-color="amarillo" class="sel-dot" title="Amarillo"></button>
+  <button data-action="paint" data-color="verde" class="sel-dot" title="Verde"></button>
+  <button data-action="paint" data-color="celeste" class="sel-dot" title="Celeste"></button>
+  <button data-action="paint" data-color="rosa" class="sel-dot" title="Rosa"></button>
+  <button data-action="note" id="sel-note-btn" class="sel-btn">📝 + nota</button>
+  <button data-action="del" id="sel-del-btn" class="sel-btn" hidden>🗑 Quitar</button>
   <button data-action="ai" class="sel-btn">✨ Resumen IA</button>
 </div>
 
@@ -415,12 +420,23 @@ main{max-width:720px; margin:0 auto;}
 <div id="toast" class="toast"></div>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600;700&display=swap">
-<style>[data-action="ai"]{display:none!important}</style>
+<style>[data-action="ai"]{display:none!important}
+:root{--hl-amarillo:#ffe45c;--hl-verde:#9ef08a;--hl-celeste:#8fd8ff;--hl-rosa:#ffa3cf}
+.reader-text mark.hlc{color:#1b1608;background:linear-gradient(104deg,transparent 0.4%,var(--hlc) 1.6%,var(--hlc) 97%,transparent 99%);border-radius:4px 2px 5px 3px;padding:0.05em 0.15em;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.hlc-amarillo{--hlc:var(--hl-amarillo)} .hlc-verde{--hlc:var(--hl-verde)} .hlc-celeste{--hlc:var(--hl-celeste)} .hlc-rosa{--hlc:var(--hl-rosa)}
+.selection-toolbar{align-items:center}
+.sel-lbl{color:var(--bg);font-size:0.8rem;font-weight:700;padding:0 0.3rem 0 0.4rem}
+.sel-dot{width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,0.7);cursor:pointer;padding:0;margin:0 2px}
+.sel-dot[data-color="amarillo"]{background:var(--hl-amarillo)} .sel-dot[data-color="verde"]{background:var(--hl-verde)} .sel-dot[data-color="celeste"]{background:var(--hl-celeste)} .sel-dot[data-color="rosa"]{background:var(--hl-rosa)}
+.sel-dot.on{outline:3px solid #fff;outline-offset:1px}
+@media (pointer:coarse){ .selection-toolbar{position:fixed!important;left:0!important;right:0;margin:0 auto;width:fit-content;top:auto!important;bottom:calc(14px + env(safe-area-inset-bottom,0px));padding:0.45rem 0.5rem;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 20px)} .sel-dot{width:36px;height:36px} }
+.cuaderno-entry-color{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+</style>
 <script>
 window.__lectioReady = new Promise(function(r){ window.__lectioResolve = r; });
 window.claude = { use: function(name){ return window.__lectioReady.then(function(api){ return api[name] || null; }); } };
 </script>
-<script type="module" src="lectio-shim.js?v=1795528694"></script>
+<script type="module" src="lectio-shim.js?v=1795647645"></script>
 
 <script>
 (function(){
@@ -1355,6 +1371,7 @@ window.claude = { use: function(name){ return window.__lectioReady.then(function
     });
   }
 
+  function refreshCurrentPage(){ if (currentBookId && currentRoute()==='libro-'+currentBookId) showPage(currentBookId, currentPage); }
   function showPage(bookId, pageNum){
     var state = pdfState[bookId];
     if (!state || !state.pdfDoc) return;
@@ -1408,11 +1425,11 @@ window.claude = { use: function(name){ return window.__lectioReady.then(function
     filtered.forEach(function(m){
       if (m.start > cursor) container.appendChild(document.createTextNode(text.slice(cursor, m.start)));
       var mk = document.createElement('mark');
-      mk.className = 'hl' + (m.h.tag ? ' hl-' + m.h.tag : '');
+      mk.className = 'hl' + (m.h.tag ? ' hl-' + m.h.tag : '') + (m.h.color ? ' hlc hlc-' + m.h.color : '');
       mk.textContent = text.slice(m.start, m.end);
       if (m.h.id){
-        mk.title = 'Ver en el cuaderno';
-        mk.addEventListener('click', function(){ location.hash = 'cuaderno'; });
+        mk.title = 'Tocá para cambiar el color o quitarlo';
+        mk.addEventListener('click', function(ev){ ev.stopPropagation(); openMarkMenu(m.h, mk); });
       }
       container.appendChild(mk);
       cursor = m.end;
@@ -1446,12 +1463,13 @@ window.claude = { use: function(name){ return window.__lectioReady.then(function
   });
 
   // ---------- selection -> highlight toolbar ----------
-  function hideSelectionToolbar(){ $('selection-toolbar').hidden = true; pendingSelection = null; }
+  function hideSelectionToolbar(){ $('selection-toolbar').hidden = true; pendingSelection = null; var n = $('sel-note-btn'), d = $('sel-del-btn'); if (n) n.hidden = false; if (d) d.hidden = true; document.querySelectorAll('#selection-toolbar .sel-dot').forEach(function(x){ x.classList.remove('on'); }); }
   function handleSelectionCheck(){
     var sel = window.getSelection();
     var text = sel && sel.toString().trim();
     var container = $('reader-text');
-    if (!text || !sel.rangeCount || container.hidden || !container.contains(sel.anchorNode)){ hideSelectionToolbar(); return; }
+    if (!text || !sel.rangeCount || container.hidden || !container.contains(sel.anchorNode)){ if (!editingMark) hideSelectionToolbar(); return; }
+    editingMark = null; $('sel-note-btn').hidden = false; $('sel-del-btn').hidden = true;
     var range = sel.getRangeAt(0);
     var rect = range.getBoundingClientRect();
     if (rect.width===0 && rect.height===0){ hideSelectionToolbar(); return; }
@@ -1467,9 +1485,40 @@ window.claude = { use: function(name){ return window.__lectioReady.then(function
   }
   document.addEventListener('mouseup', function(){ setTimeout(handleSelectionCheck, 0); });
   document.addEventListener('touchend', function(){ setTimeout(handleSelectionCheck, 80); });
+  var selTimer = null;
+  document.addEventListener('selectionchange', function(){ clearTimeout(selTimer); selTimer = setTimeout(function(){ if (!editingMark) handleSelectionCheck(); }, 250); });
+  var editingMark = null;
+  function openMarkMenu(h, el){
+    window.getSelection().removeAllRanges();
+    editingMark = h; pendingSelection = null;
+    var toolbar = $('selection-toolbar');
+    toolbar.querySelectorAll('.sel-dot').forEach(function(d){ d.classList.toggle('on', d.dataset.color === (h.color || '')); });
+    $('sel-note-btn').hidden = true; $('sel-del-btn').hidden = false;
+    toolbar.hidden = false;
+    var rect = el.getBoundingClientRect();
+    toolbar.style.top = Math.max(8, window.scrollY + rect.top - toolbar.offsetHeight - 10) + 'px';
+    toolbar.style.left = Math.max(8, Math.min(window.scrollX + rect.left, window.scrollX + document.documentElement.clientWidth - toolbar.offsetWidth - 8)) + 'px';
+  }
+  document.addEventListener('click', function(e){ if (editingMark && !e.target.closest('#selection-toolbar') && !e.target.closest('mark.hl')){ editingMark = null; hideSelectionToolbar(); } });
 
   $('selection-toolbar').addEventListener('click', function(e){
     var btn = e.target.closest ? e.target.closest('.sel-btn') : null;
+    var dot = e.target.closest ? e.target.closest('.sel-dot') : null;
+    if (dot && editingMark){
+      var hm = editingMark; editingMark = null;
+      db.collection('highlights').doc(hm.id).update({color: dot.dataset.color}).then(function(){ hideSelectionToolbar(); refreshCurrentPage(); });
+      return;
+    }
+    if (btn && btn.dataset.action==='del' && editingMark){
+      var hd = editingMark; editingMark = null;
+      db.collection('highlights').doc(hd.id).delete().then(function(){ hideSelectionToolbar(); refreshCurrentPage(); showToast('Quitado.'); });
+      return;
+    }
+    if (dot && pendingSelection){
+      var ps = pendingSelection; ps.color = dot.dataset.color;
+      saveHighlight(ps).then(function(){ hideSelectionToolbar(); window.getSelection().removeAllRanges(); refreshCurrentPage(); showToast('Pintado ✓ (también queda en tu Cuaderno)'); });
+      return;
+    }
     if (!btn || !pendingSelection) return;
     var action = btn.dataset.action;
     var sel = pendingSelection;
@@ -1492,7 +1541,7 @@ window.claude = { use: function(name){ return window.__lectioReady.then(function
     var doc = {
       bookId: data.bookId, bookTitle: book ? book.title : '', page: data.page,
       text: data.text, tag: data.tag || null, note: data.note || null,
-      aiSummary: data.aiSummary || null, createdAt: Date.now()
+      aiSummary: data.aiSummary || null, color: data.color || null, createdAt: Date.now()
     };
     return db.collection('highlights').doc(id).set(doc).then(function(){ return id; });
   }
